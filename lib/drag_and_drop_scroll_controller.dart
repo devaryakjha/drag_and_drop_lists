@@ -47,6 +47,17 @@ class DragAndDropScrollPositionConfig {
   /// Height of a standard [DragAndDropList] footer widget, if present.
   final double groupFooterHeight;
 
+  /// Default top offset to account for pinned headers (e.g., SliverAppBar).
+  ///
+  /// When using [DragAndDropLists] inside a [CustomScrollView] with pinned
+  /// slivers at the top, set this to the height of those pinned elements.
+  /// This ensures scroll-to operations position items below the pinned area.
+  ///
+  /// Can be overridden per scroll operation via the `topOffset` parameter
+  /// in [DragAndDropScrollController.scrollToGroup] and
+  /// [DragAndDropScrollController.scrollToItem].
+  final double topOffset;
+
   const DragAndDropScrollPositionConfig({
     this.groupHeaderHeight = 0,
     this.expansionTileHeaderHeight = 56.0,
@@ -57,6 +68,7 @@ class DragAndDropScrollPositionConfig {
     this.listDividerHeight = 0,
     this.groupPadding = EdgeInsets.zero,
     this.groupFooterHeight = 0,
+    this.topOffset = 0,
   });
 }
 
@@ -133,6 +145,8 @@ class DragAndDropScrollController extends ScrollController {
   ///
   /// [alignment] specifies where in the viewport the group should appear.
   /// [duration] and [curve] control the scroll animation.
+  /// [topOffset] accounts for pinned headers (e.g., SliverAppBar). If null,
+  /// uses the value from [config.topOffset].
   ///
   /// Returns a [Future] that completes when the scroll animation is finished.
   /// Throws [RangeError] if [groupIndex] is out of bounds.
@@ -142,6 +156,7 @@ class DragAndDropScrollController extends ScrollController {
     ScrollAlignment alignment = ScrollAlignment.start,
     Duration duration = const Duration(milliseconds: 300),
     Curve curve = Curves.easeInOut,
+    double? topOffset,
   }) async {
     if (!hasClients) return;
 
@@ -149,9 +164,11 @@ class DragAndDropScrollController extends ScrollController {
       throw RangeError.index(groupIndex, _lists, 'groupIndex');
     }
 
+    final effectiveTopOffset = topOffset ?? config.topOffset;
     final offset = _calculateGroupOffset(groupIndex);
     final groupHeight = _getGroupHeight(_lists[groupIndex]);
-    final adjustedOffset = _applyAlignment(offset, groupHeight, alignment);
+    final adjustedOffset =
+        _applyAlignment(offset, groupHeight, alignment, effectiveTopOffset);
     final clampedOffset = adjustedOffset.clamp(
       position.minScrollExtent,
       position.maxScrollExtent,
@@ -175,6 +192,8 @@ class DragAndDropScrollController extends ScrollController {
   /// [expansionAnimationDuration] is the time to wait for the expansion
   /// animation to complete (defaults to 250ms, which accounts for the 200ms
   /// animation plus a buffer).
+  /// [topOffset] accounts for pinned headers (e.g., SliverAppBar). If null,
+  /// uses the value from [config.topOffset].
   ///
   /// Returns a [Future] that completes when the scroll animation is finished.
   /// Throws [RangeError] if indices are out of bounds.
@@ -186,6 +205,7 @@ class DragAndDropScrollController extends ScrollController {
     Duration duration = const Duration(milliseconds: 300),
     Curve curve = Curves.easeInOut,
     Duration expansionAnimationDuration = const Duration(milliseconds: 250),
+    double? topOffset,
   }) async {
     if (!hasClients) return;
 
@@ -206,9 +226,10 @@ class DragAndDropScrollController extends ScrollController {
       await Future.delayed(expansionAnimationDuration);
     }
 
+    final effectiveTopOffset = topOffset ?? config.topOffset;
     final offset = _calculateItemOffset(groupIndex, itemIndex);
     final adjustedOffset =
-        _applyAlignment(offset, config.itemHeight, alignment);
+        _applyAlignment(offset, config.itemHeight, alignment, effectiveTopOffset);
     final clampedOffset = adjustedOffset.clamp(
       position.minScrollExtent,
       position.maxScrollExtent,
@@ -308,21 +329,29 @@ class DragAndDropScrollController extends ScrollController {
   }
 
   /// Applies alignment adjustment to the calculated offset.
+  ///
+  /// [topOffset] is subtracted to account for pinned headers, ensuring the
+  /// target appears in the visible area below any pinned elements.
   double _applyAlignment(
     double targetOffset,
     double targetHeight,
     ScrollAlignment alignment,
+    double topOffset,
   ) {
     if (!hasClients) return targetOffset;
 
     final viewportDimension = position.viewportDimension;
+    final effectiveViewport = viewportDimension - topOffset;
 
     switch (alignment) {
       case ScrollAlignment.start:
-        return targetOffset;
+        // Position target just below the pinned area
+        return targetOffset - topOffset;
       case ScrollAlignment.center:
-        return targetOffset - (viewportDimension / 2) + (targetHeight / 2);
+        // Center target in the effective viewport (excluding pinned area)
+        return targetOffset - topOffset - (effectiveViewport / 2) + (targetHeight / 2);
       case ScrollAlignment.end:
+        // Position target at the bottom of the viewport
         return targetOffset - viewportDimension + targetHeight;
     }
   }
