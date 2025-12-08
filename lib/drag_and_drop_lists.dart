@@ -34,6 +34,7 @@ export 'package:drag_and_drop_lists/drag_and_drop_list_expansion.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_list_target.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_list_wrapper.dart';
 export 'package:drag_and_drop_lists/drag_handle.dart';
+export 'package:drag_and_drop_lists/drag_and_drop_scroll_controller.dart';
 
 typedef OnItemReorder = void Function(
   int oldItemIndex,
