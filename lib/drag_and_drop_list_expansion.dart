@@ -188,9 +188,9 @@ class DragAndDropListExpansion implements DragAndDropListExpansionInterface {
 
   @override
   collapse() {
-    if (!isExpanded) {
+    if (isExpanded) {
       _expanded.value = false;
-      _expansionKey.currentState!.collapse();
+      _expansionKey.currentState?.collapse();
     }
   }
 
@@ -198,7 +198,7 @@ class DragAndDropListExpansion implements DragAndDropListExpansionInterface {
   expand() {
     if (!isExpanded) {
       _expanded.value = true;
-      _expansionKey.currentState!.expand();
+      _expansionKey.currentState?.expand();
     }
   }
 

@@ -6,7 +6,7 @@ import 'package:drag_and_drop_lists/drag_and_drop_list_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
 
-class DragAndDropList implements DragAndDropListInterface {
+class DragAndDropList implements DragAndDropListExpansionInterface {
   /// The widget that is displayed at the top of the list.
   final Widget? header;
 
@@ -51,6 +51,35 @@ class DragAndDropList implements DragAndDropListInterface {
   final bool canDrag;
   @override
   final Key? key;
+
+  /// Whether the list starts expanded. Defaults to true.
+  final bool initiallyExpanded;
+
+  // Expansion state
+  final ValueNotifier<bool> _expanded = ValueNotifier<bool>(true);
+
+  @override
+  bool get isExpanded => _expanded.value;
+
+  @override
+  void expand() {
+    if (!_expanded.value) {
+      _expanded.value = true;
+    }
+  }
+
+  @override
+  void collapse() {
+    if (_expanded.value) {
+      _expanded.value = false;
+    }
+  }
+
+  @override
+  void toggleExpanded() {
+    _expanded.value = !_expanded.value;
+  }
+
   DragAndDropList({
     required this.children,
     this.key,
@@ -64,51 +93,63 @@ class DragAndDropList implements DragAndDropListInterface {
     this.horizontalAlignment = MainAxisAlignment.start,
     this.verticalAlignment = CrossAxisAlignment.start,
     this.canDrag = true,
-  });
+    this.initiallyExpanded = true,
+  }) {
+    _expanded.value = initiallyExpanded;
+  }
 
   @override
   Widget generateWidget(DragAndDropBuilderParameters params) {
-    var contents = <Widget>[];
-    if (header != null) {
-      contents.add(Flexible(child: header!));
-    }
-    Widget intrinsicHeight = IntrinsicHeight(
-      child: Row(
-        mainAxisAlignment: horizontalAlignment,
-        mainAxisSize: MainAxisSize.max,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: _generateDragAndDropListInnerContents(params),
-      ),
-    );
-    if (params.axis == Axis.horizontal) {
-      intrinsicHeight = SizedBox(
-        width: params.listWidth,
-        child: intrinsicHeight,
-      );
-    }
-    if (params.listInnerDecoration != null) {
-      intrinsicHeight = Container(
-        decoration: params.listInnerDecoration,
-        child: intrinsicHeight,
-      );
-    }
-    contents.add(intrinsicHeight);
+    return ValueListenableBuilder<bool>(
+      valueListenable: _expanded,
+      builder: (context, expanded, _) {
+        var contents = <Widget>[];
+        if (header != null) {
+          contents.add(Flexible(child: header!));
+        }
 
-    if (footer != null) {
-      contents.add(Flexible(child: footer!));
-    }
+        // Only show the list content when expanded
+        if (expanded) {
+          Widget intrinsicHeight = IntrinsicHeight(
+            child: Row(
+              mainAxisAlignment: horizontalAlignment,
+              mainAxisSize: MainAxisSize.max,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: _generateDragAndDropListInnerContents(params),
+            ),
+          );
+          if (params.axis == Axis.horizontal) {
+            intrinsicHeight = SizedBox(
+              width: params.listWidth,
+              child: intrinsicHeight,
+            );
+          }
+          if (params.listInnerDecoration != null) {
+            intrinsicHeight = Container(
+              decoration: params.listInnerDecoration,
+              child: intrinsicHeight,
+            );
+          }
+          contents.add(intrinsicHeight);
 
-    return Container(
-      key: key,
-      width: params.axis == Axis.vertical
-          ? double.infinity
-          : params.listWidth - params.listPadding!.horizontal,
-      decoration: decoration ?? params.listDecoration,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: verticalAlignment,
-        children: contents,
-      ),
+          if (footer != null) {
+            contents.add(Flexible(child: footer!));
+          }
+        }
+
+        return Container(
+          key: key,
+          width: params.axis == Axis.vertical
+              ? double.infinity
+              : params.listWidth - params.listPadding!.horizontal,
+          decoration: decoration ?? params.listDecoration,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: verticalAlignment,
+            children: contents,
+          ),
+        );
+      },
     );
   }
 

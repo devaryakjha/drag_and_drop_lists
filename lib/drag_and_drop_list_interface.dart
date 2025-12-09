@@ -21,11 +21,11 @@ abstract class DragAndDropListExpansionInterface
 
   DragAndDropListExpansionInterface({this.children});
 
-  get isExpanded;
+  bool get isExpanded;
 
-  toggleExpanded();
+  void toggleExpanded();
 
-  expand();
+  void expand();
 
-  collapse();
+  void collapse();
 }

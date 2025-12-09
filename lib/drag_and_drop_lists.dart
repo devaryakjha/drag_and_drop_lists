@@ -20,6 +20,7 @@ import 'package:drag_and_drop_lists/drag_and_drop_item_target.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_interface.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_target.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_wrapper.dart';
+import 'package:drag_and_drop_lists/drag_and_drop_scroll_controller.dart';
 import 'package:drag_and_drop_lists/drag_handle.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
@@ -47,7 +48,8 @@ typedef OnItemAdd = void Function(
   int listIndex,
   int newItemIndex,
 );
-typedef OnListAdd = void Function(DragAndDropListInterface newList, int newListIndex);
+typedef OnListAdd = void Function(
+    DragAndDropListInterface newList, int newListIndex);
 typedef OnListReorder = void Function(int oldListIndex, int newListIndex);
 typedef OnListDraggingChanged = void Function(
   DragAndDropListInterface? list,
@@ -280,12 +282,24 @@ class DragAndDropLists extends StatefulWidget {
   /// the vertical axis. By default this is set to true. This may be useful to
   /// disable when setting customDragTargets
   final bool constrainDraggingAxis;
-  
+
   /// If you put a widget before DragAndDropLists there's an unexpected padding
   /// before the list renders. This is the default behaviour for ListView which
   /// is used internally. To remove the padding, set this field to true
   /// https://github.com/flutter/flutter/issues/14842#issuecomment-371344881
   final bool removeTopPadding;
+
+  /// Whether to automatically collapse all lists when a list is being dragged.
+  /// When enabled, all lists will collapse when any list starts dragging,
+  /// and will be restored to their previous expansion states when dragging ends.
+  /// This provides a better UX for list drag and drop by showing only headers.
+  /// Defaults to false.
+  final bool collapseListsOnListDrag;
+
+  /// Whether to automatically scroll to the dropped list position after a list
+  /// drag ends. Only applies when [collapseListsOnListDrag] is true.
+  /// Defaults to true.
+  final bool scrollToDroppedList;
 
   DragAndDropLists({
     required this.children,
@@ -337,15 +351,10 @@ class DragAndDropLists extends StatefulWidget {
     this.itemDragHandle,
     this.constrainDraggingAxis = true,
     this.removeTopPadding = false,
+    this.collapseListsOnListDrag = false,
+    this.scrollToDroppedList = true,
     super.key,
   }) {
-    if (listGhost == null &&
-        children
-            .whereType<DragAndDropListExpansionInterface>()
-            .isNotEmpty) {
-      throw Exception(
-          'If using DragAndDropListExpansion, you must provide a non-null listGhost');
-    }
     if (sliverList && scrollController == null) {
       throw Exception(
           'A scroll controller must be provided when using sliver lists');
@@ -371,6 +380,11 @@ class DragAndDropListsState extends State<DragAndDropLists> {
   double? _pointerXPosition;
   bool _scrolling = false;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
+
+  // State for auto-collapse feature
+  final Map<Key, bool> _savedExpansionStates = {};
+  bool _listsCollapsedForDrag = false;
+  int? _droppedListIndex;
 
   @override
   void initState() {
@@ -401,7 +415,7 @@ class DragAndDropListsState extends State<DragAndDropLists> {
       onItemDropOnLastTarget: _internalOnItemDropOnLastTarget,
       onListReordered: _internalOnListReorder,
       onItemDraggingChanged: widget.onItemDraggingChanged,
-      onListDraggingChanged: widget.onListDraggingChanged,
+      onListDraggingChanged: _handleListDraggingChanged,
       listOnWillAccept: widget.listOnWillAccept,
       listTargetOnWillAccept: widget.listTargetOnWillAccept,
       itemOnWillAccept: widget.itemOnWillAccept,
@@ -606,12 +620,20 @@ class DragAndDropListsState extends State<DragAndDropLists> {
     if (reorderedListIndex == -1) {
       // this is a new list
       if (widget.onListAdd != null) widget.onListAdd!(reordered, newListIndex);
+      // Store the dropped index for scrolling
+      if (widget.collapseListsOnListDrag) {
+        _droppedListIndex = newListIndex;
+      }
     } else {
       if (newListIndex > reorderedListIndex) {
         // same list, so if the new position is after the old position, the removal of the old item must be taken into account
         newListIndex--;
       }
       widget.onListReorder(reorderedListIndex, newListIndex);
+      // Store the dropped index for scrolling
+      if (widget.collapseListsOnListDrag) {
+        _droppedListIndex = newListIndex;
+      }
     }
   }
 
@@ -674,9 +696,17 @@ class DragAndDropListsState extends State<DragAndDropLists> {
 
     if (reorderedListIndex >= 0) {
       widget.onListReorder(reorderedListIndex, widget.children.length - 1);
+      // Store the dropped index for scrolling (last position)
+      if (widget.collapseListsOnListDrag) {
+        _droppedListIndex = widget.children.length - 1;
+      }
     } else {
       if (widget.onListAdd != null) {
         widget.onListAdd!(newOrReordered, reorderedListIndex);
+      }
+      // Store the dropped index for scrolling
+      if (widget.collapseListsOnListDrag) {
+        _droppedListIndex = widget.children.length;
       }
     }
   }
@@ -845,5 +875,145 @@ class DragAndDropListsState extends State<DragAndDropLists> {
   static Offset localToGlobal(RenderObject object, Offset point,
       {RenderObject? ancestor}) {
     return MatrixUtils.transformPoint(object.getTransformTo(ancestor), point);
+  }
+
+  // Auto-collapse feature methods
+
+  void _handleListDraggingChanged(
+      DragAndDropListInterface? list, bool dragging) {
+    debugPrint(
+        '[DragAndDropLists] _handleListDraggingChanged: list=$list, dragging=$dragging');
+    if (widget.collapseListsOnListDrag) {
+      if (dragging) {
+        debugPrint('[DragAndDropLists] Starting drag, collapsing all lists');
+        _collapseAllLists();
+      } else {
+        debugPrint(
+            '[DragAndDropLists] Ending drag, restoring states and scrolling to index $_droppedListIndex');
+        _restoreExpansionStates();
+        if (widget.scrollToDroppedList) {
+          _scrollToDroppedList();
+        }
+        _droppedListIndex = null;
+      }
+    }
+    widget.onListDraggingChanged?.call(list, dragging);
+  }
+
+  void _collapseAllLists() {
+    debugPrint(
+        '[DragAndDropLists] _collapseAllLists called, _listsCollapsedForDrag=$_listsCollapsedForDrag');
+    if (_listsCollapsedForDrag) return;
+
+    _savedExpansionStates.clear();
+
+    for (var i = 0; i < widget.children.length; i++) {
+      var list = widget.children[i];
+      debugPrint(
+          '[DragAndDropLists] Checking list[$i]: type=${list.runtimeType}, key=${list.key}, is DragAndDropListExpansionInterface=${list is DragAndDropListExpansionInterface}');
+      if (list is DragAndDropListExpansionInterface) {
+        debugPrint('[DragAndDropLists] List[$i] isExpanded=${list.isExpanded}');
+        if (list.key != null) {
+          _savedExpansionStates[list.key!] = list.isExpanded;
+        }
+        if (list.isExpanded) {
+          debugPrint('[DragAndDropLists] Collapsing list[$i]');
+          list.collapse();
+        }
+      }
+    }
+
+    _listsCollapsedForDrag = true;
+    debugPrint(
+        '[DragAndDropLists] Saved expansion states: $_savedExpansionStates');
+  }
+
+  void _restoreExpansionStates() {
+    debugPrint(
+        '[DragAndDropLists] _restoreExpansionStates called, _listsCollapsedForDrag=$_listsCollapsedForDrag');
+    if (!_listsCollapsedForDrag) return;
+
+    for (var i = 0; i < widget.children.length; i++) {
+      var list = widget.children[i];
+      if (list is DragAndDropListExpansionInterface && list.key != null) {
+        final wasExpanded = _savedExpansionStates[list.key];
+        debugPrint(
+            '[DragAndDropLists] List[$i] key=${list.key}, wasExpanded=$wasExpanded');
+        if (wasExpanded == true) {
+          debugPrint('[DragAndDropLists] Expanding list[$i]');
+          list.expand();
+        }
+      }
+    }
+
+    _savedExpansionStates.clear();
+    _listsCollapsedForDrag = false;
+  }
+
+  void _scrollToDroppedList() {
+    debugPrint(
+        '[DragAndDropLists] _scrollToDroppedList called, _droppedListIndex=$_droppedListIndex, _scrollController=$_scrollController');
+    if (_droppedListIndex == null || _scrollController == null) {
+      debugPrint(
+          '[DragAndDropLists] Early return: _droppedListIndex or _scrollController is null');
+      return;
+    }
+
+    final droppedIndex = _droppedListIndex!;
+    debugPrint('[DragAndDropLists] droppedIndex=$droppedIndex');
+
+    // Use the custom scroll controller if available
+    if (_scrollController is DragAndDropScrollController) {
+      debugPrint('[DragAndDropLists] Using DragAndDropScrollController');
+      final controller = _scrollController as DragAndDropScrollController;
+      // Update lists reference and scroll to the dropped group
+      controller.updateLists(
+        widget.children,
+        hasListDividers: widget.listDivider != null,
+        listDividerOnLastChild: widget.listDividerOnLastChild,
+      );
+      // Delay slightly to allow expansion animations to start
+      Future.delayed(const Duration(milliseconds: 50), () {
+        controller.scrollToGroup(
+          droppedIndex,
+          alignment: ScrollAlignment.start,
+        );
+      });
+    } else {
+      debugPrint('[DragAndDropLists] Using fallback scroll method');
+      // Fallback: calculate approximate offset and scroll
+      _scrollToListIndex(droppedIndex);
+    }
+  }
+
+  void _scrollToListIndex(int index) {
+    if (_scrollController == null || !_scrollController!.hasClients) return;
+
+    // Simple approximation - scroll to bring the list into view
+    // This is a basic implementation; for precise scrolling, use DragAndDropScrollController
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted ||
+          _scrollController == null ||
+          !_scrollController!.hasClients) {
+        return;
+      }
+
+      // Estimate position based on index (rough approximation)
+      // The actual position depends on list heights which we don't know here
+      final maxScroll = _scrollController!.position.maxScrollExtent;
+      final listCount = widget.children.length;
+
+      if (listCount == 0) return;
+
+      // Estimate scroll position proportionally
+      final estimatedOffset = (index / listCount) * maxScroll;
+      final targetOffset = estimatedOffset.clamp(0.0, maxScroll);
+
+      _scrollController!.animateTo(
+        targetOffset,
+        duration: const Duration(milliseconds: 300),
+        curve: Curves.easeInOut,
+      );
+    });
   }
 }
