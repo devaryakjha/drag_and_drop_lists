@@ -171,7 +171,7 @@ class DragAndDropScrollController extends ScrollController {
         _applyAlignment(offset, groupHeight, alignment, effectiveTopOffset);
     final clampedOffset = adjustedOffset.clamp(
       position.minScrollExtent,
-      position.maxScrollExtent,
+      double.infinity,
     );
 
     await animateTo(
@@ -228,11 +228,11 @@ class DragAndDropScrollController extends ScrollController {
 
     final effectiveTopOffset = topOffset ?? config.topOffset;
     final offset = _calculateItemOffset(groupIndex, itemIndex);
-    final adjustedOffset =
-        _applyAlignment(offset, config.itemHeight, alignment, effectiveTopOffset);
+    final adjustedOffset = _applyAlignment(
+        offset, config.itemHeight, alignment, effectiveTopOffset);
     final clampedOffset = adjustedOffset.clamp(
       position.minScrollExtent,
-      position.maxScrollExtent,
+      double.infinity,
     );
 
     await animateTo(
@@ -349,7 +349,10 @@ class DragAndDropScrollController extends ScrollController {
         return targetOffset - topOffset;
       case ScrollAlignment.center:
         // Center target in the effective viewport (excluding pinned area)
-        return targetOffset - topOffset - (effectiveViewport / 2) + (targetHeight / 2);
+        return targetOffset -
+            topOffset -
+            (effectiveViewport / 2) +
+            (targetHeight / 2);
       case ScrollAlignment.end:
         // Position target at the bottom of the viewport
         return targetOffset - viewportDimension + targetHeight;
