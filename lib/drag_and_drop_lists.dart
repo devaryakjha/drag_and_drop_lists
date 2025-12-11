@@ -385,7 +385,6 @@ class DragAndDropListsState extends State<DragAndDropLists> {
   final Map<Key, bool> _savedExpansionStates = {};
   bool _listsCollapsedForDrag = false;
   int? _droppedListIndex;
-  DragAndDropListInterface? _currentlyDraggingList;
 
   @override
   void initState() {
@@ -883,27 +882,12 @@ class DragAndDropListsState extends State<DragAndDropLists> {
   void _handleListDraggingChanged(
       DragAndDropListInterface? list, bool dragging) {
     debugPrint(
-        '[DragAndDropLists] _handleListDraggingChanged: list=$list, dragging=$dragging, _currentlyDraggingList=$_currentlyDraggingList');
+        '[DragAndDropLists] _handleListDraggingChanged: list=$list, dragging=$dragging');
     if (widget.collapseListsOnListDrag) {
       if (dragging) {
-        // Ignore duplicate drag start calls - only process if we're not already dragging
-        if (_currentlyDraggingList != null) {
-          debugPrint(
-              '[DragAndDropLists] Ignoring duplicate drag start - already dragging');
-          return;
-        }
-        _currentlyDraggingList = list;
         debugPrint('[DragAndDropLists] Starting drag, collapsing all lists');
         _collapseAllLists();
       } else {
-        // Only process drag end if this is the list that started the drag
-        // or if we're in a collapsed state (to handle edge cases)
-        if (_currentlyDraggingList != null && _currentlyDraggingList != list) {
-          debugPrint(
-              '[DragAndDropLists] Ignoring drag end from different list');
-          return;
-        }
-        _currentlyDraggingList = null;
         debugPrint(
             '[DragAndDropLists] Ending drag, restoring states and scrolling to index $_droppedListIndex');
         _restoreExpansionStates();
