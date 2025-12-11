@@ -336,6 +336,19 @@ class DragAndDropLists extends StatefulWidget {
   @Deprecated('Use autoCollapseConfig instead')
   final bool scrollToDroppedList;
 
+  /// The size of the scroll trigger zone at the edges of the list in pixels.
+  /// When dragging near the edge, auto-scroll is triggered within this zone.
+  /// Defaults to 80 pixels.
+  final double autoScrollAreaSize;
+
+  /// The speed of the auto-scroll in pixels per animation frame.
+  /// Higher values result in faster scrolling. Defaults to 8.0.
+  final double autoScrollSpeed;
+
+  /// The duration of each auto-scroll animation step in milliseconds.
+  /// Lower values result in smoother but more frequent updates. Defaults to 30.
+  final int autoScrollAnimationDuration;
+
   DragAndDropLists({
     required this.children,
     required this.onItemReorder,
@@ -387,6 +400,9 @@ class DragAndDropLists extends StatefulWidget {
     this.constrainDraggingAxis = true,
     this.removeTopPadding = false,
     this.autoCollapseConfig = AutoCollapseConfig.disabled,
+    this.autoScrollAreaSize = 80,
+    this.autoScrollSpeed = 8.0,
+    this.autoScrollAnimationDuration = 30,
     @Deprecated('Use autoCollapseConfig instead')
     this.collapseListsOnListDrag = false,
     @Deprecated('Use autoCollapseConfig instead')
@@ -867,12 +883,6 @@ class DragAndDropListsState extends State<DragAndDropLists> {
     _pointerDown = false;
   }
 
-  final int _duration = 30; // in ms
-  final int _scrollAreaSize = 20;
-  final double _overDragMin = 5.0;
-  final double _overDragMax = 20.0;
-  final double _overDragCoefficient = 3.3;
-
   _scrollList() async {
     if (!widget.disableScrolling &&
         !_scrolling &&
@@ -908,11 +918,25 @@ class DragAndDropListsState extends State<DragAndDropLists> {
       if (newOffset != null) {
         _scrolling = true;
         await _scrollController!.animateTo(newOffset,
-            duration: Duration(milliseconds: _duration), curve: Curves.linear);
+            duration:
+                Duration(milliseconds: widget.autoScrollAnimationDuration),
+            curve: Curves.linear);
         _scrolling = false;
         if (_pointerDown) _scrollList();
       }
     }
+  }
+
+  /// Calculates scroll speed based on distance into the scroll zone.
+  /// Returns a value between 0.3 (at edge) and 1.0 (deep in zone) that
+  /// multiplies the base scroll speed.
+  double _calculateScrollSpeedMultiplier(double distanceIntoZone) {
+    // Normalize distance to 0-1 range based on scroll area size
+    final normalizedDistance =
+        (distanceIntoZone / widget.autoScrollAreaSize).clamp(0.0, 1.0);
+    // Use easeIn curve for more natural acceleration
+    // Start at 0.5 speed at edge, ramp up to 1.0 deep in zone
+    return 0.5 + (0.5 * normalizedDistance * normalizedDistance);
   }
 
   double? _scrollListVertical(Offset topLeftOffset, Offset bottomRightOffset) {
@@ -923,20 +947,29 @@ class DragAndDropListsState extends State<DragAndDropLists> {
     var pointerYPosition = _pointerYPosition;
     var scrollController = _scrollController;
     if (scrollController != null && pointerYPosition != null) {
-      if (pointerYPosition < (top + _scrollAreaSize) &&
+      // Scroll UP when pointer is in top scroll zone
+      if (pointerYPosition < (top + widget.autoScrollAreaSize) &&
           scrollController.position.pixels >
               scrollController.position.minScrollExtent) {
-        final overDrag =
-            max((top + _scrollAreaSize) - pointerYPosition, _overDragMax);
+        final distanceIntoZone =
+            (top + widget.autoScrollAreaSize) - pointerYPosition;
+        final speedMultiplier =
+            _calculateScrollSpeedMultiplier(distanceIntoZone);
+        final scrollAmount = widget.autoScrollSpeed * speedMultiplier;
         newOffset = max(scrollController.position.minScrollExtent,
-            scrollController.position.pixels - overDrag / _overDragCoefficient);
-      } else if (pointerYPosition > (bottom - _scrollAreaSize) &&
+            scrollController.position.pixels - scrollAmount);
+      }
+      // Scroll DOWN when pointer is in bottom scroll zone
+      else if (pointerYPosition > (bottom - widget.autoScrollAreaSize) &&
           scrollController.position.pixels <
               scrollController.position.maxScrollExtent) {
-        final overDrag = max<double>(
-            pointerYPosition - (bottom - _scrollAreaSize), _overDragMax);
+        final distanceIntoZone =
+            pointerYPosition - (bottom - widget.autoScrollAreaSize);
+        final speedMultiplier =
+            _calculateScrollSpeedMultiplier(distanceIntoZone);
+        final scrollAmount = widget.autoScrollSpeed * speedMultiplier;
         newOffset = min(scrollController.position.maxScrollExtent,
-            scrollController.position.pixels + overDrag / _overDragCoefficient);
+            scrollController.position.pixels + scrollAmount);
       }
     }
 
@@ -952,24 +985,29 @@ class DragAndDropListsState extends State<DragAndDropLists> {
     var pointerXPosition = _pointerXPosition;
     var scrollController = _scrollController;
     if (scrollController != null && pointerXPosition != null) {
-      if (pointerXPosition < (left + _scrollAreaSize) &&
+      // Scroll LEFT when pointer is in left scroll zone
+      if (pointerXPosition < (left + widget.autoScrollAreaSize) &&
           scrollController.position.pixels >
               scrollController.position.minScrollExtent) {
-        // scrolling toward minScrollExtent
-        final overDrag = min(
-            (left + _scrollAreaSize) - pointerXPosition + _overDragMin,
-            _overDragMax);
+        final distanceIntoZone =
+            (left + widget.autoScrollAreaSize) - pointerXPosition;
+        final speedMultiplier =
+            _calculateScrollSpeedMultiplier(distanceIntoZone);
+        final scrollAmount = widget.autoScrollSpeed * speedMultiplier;
         newOffset = max(scrollController.position.minScrollExtent,
-            scrollController.position.pixels - overDrag / _overDragCoefficient);
-      } else if (pointerXPosition > (right - _scrollAreaSize) &&
+            scrollController.position.pixels - scrollAmount);
+      }
+      // Scroll RIGHT when pointer is in right scroll zone
+      else if (pointerXPosition > (right - widget.autoScrollAreaSize) &&
           scrollController.position.pixels <
               scrollController.position.maxScrollExtent) {
-        // scrolling toward maxScrollExtent
-        final overDrag = min(
-            pointerXPosition - (right - _scrollAreaSize) + _overDragMin,
-            _overDragMax);
+        final distanceIntoZone =
+            pointerXPosition - (right - widget.autoScrollAreaSize);
+        final speedMultiplier =
+            _calculateScrollSpeedMultiplier(distanceIntoZone);
+        final scrollAmount = widget.autoScrollSpeed * speedMultiplier;
         newOffset = min(scrollController.position.maxScrollExtent,
-            scrollController.position.pixels + overDrag / _overDragCoefficient);
+            scrollController.position.pixels + scrollAmount);
       }
     }
 
@@ -985,24 +1023,29 @@ class DragAndDropListsState extends State<DragAndDropLists> {
     var pointerXPosition = _pointerXPosition;
     var scrollController = _scrollController;
     if (scrollController != null && pointerXPosition != null) {
-      if (pointerXPosition < (left + _scrollAreaSize) &&
+      // Scroll toward maxScrollExtent when pointer is in left scroll zone (RTL)
+      if (pointerXPosition < (left + widget.autoScrollAreaSize) &&
           scrollController.position.pixels <
               scrollController.position.maxScrollExtent) {
-        // scrolling toward maxScrollExtent
-        final overDrag = min(
-            (left + _scrollAreaSize) - pointerXPosition + _overDragMin,
-            _overDragMax);
+        final distanceIntoZone =
+            (left + widget.autoScrollAreaSize) - pointerXPosition;
+        final speedMultiplier =
+            _calculateScrollSpeedMultiplier(distanceIntoZone);
+        final scrollAmount = widget.autoScrollSpeed * speedMultiplier;
         newOffset = min(scrollController.position.maxScrollExtent,
-            scrollController.position.pixels + overDrag / _overDragCoefficient);
-      } else if (pointerXPosition > (right - _scrollAreaSize) &&
+            scrollController.position.pixels + scrollAmount);
+      }
+      // Scroll toward minScrollExtent when pointer is in right scroll zone (RTL)
+      else if (pointerXPosition > (right - widget.autoScrollAreaSize) &&
           scrollController.position.pixels >
               scrollController.position.minScrollExtent) {
-        // scrolling toward minScrollExtent
-        final overDrag = min(
-            pointerXPosition - (right - _scrollAreaSize) + _overDragMin,
-            _overDragMax);
+        final distanceIntoZone =
+            pointerXPosition - (right - widget.autoScrollAreaSize);
+        final speedMultiplier =
+            _calculateScrollSpeedMultiplier(distanceIntoZone);
+        final scrollAmount = widget.autoScrollSpeed * speedMultiplier;
         newOffset = max(scrollController.position.minScrollExtent,
-            scrollController.position.pixels - overDrag / _overDragCoefficient);
+            scrollController.position.pixels - scrollAmount);
       }
     }
 

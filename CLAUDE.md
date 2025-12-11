@@ -112,7 +112,10 @@ The project uses FVM (Flutter Version Manager) with the stable channel. The conf
 
 - **Horizontal Lists**: When setting `axis` to `Axis.horizontal`, you must provide a finite value for `listWidth`. Horizontal + sliver mode is not currently supported.
 
-- **Auto-scrolling**: The widget automatically scrolls lists when dragging near the edges. Scrolling can be disabled by setting `disableScrolling: true`.
+- **Auto-scrolling**: The widget automatically scrolls lists when dragging near the edges. Scrolling can be disabled by setting `disableScrolling: true`. The auto-scroll behavior can be fine-tuned with:
+  - `autoScrollAreaSize`: Size of the scroll trigger zone at edges (default: 80px)
+  - `autoScrollSpeed`: Base scroll speed in pixels per frame (default: 8.0)
+  - `autoScrollAnimationDuration`: Duration of each scroll step in ms (default: 30)
 
 - **Auto-collapse on Drag**: Lists can automatically collapse when a drag operation starts, making it easier to see drop targets. Configure via `autoCollapseConfig`. Lists are restored to their previous expansion states when the drag ends.
 
