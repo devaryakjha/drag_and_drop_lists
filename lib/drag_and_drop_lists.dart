@@ -14,18 +14,21 @@ library drag_and_drop_lists;
 
 import 'dart:math';
 
+import 'package:drag_and_drop_lists/auto_collapse_config.dart';
+import 'package:drag_and_drop_lists/collapse_state_manager.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_builder_parameters.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_item.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_item_target.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_interface.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_target.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_wrapper.dart';
-import 'package:drag_and_drop_lists/drag_and_drop_scroll_controller.dart';
 import 'package:drag_and_drop_lists/drag_handle.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
 
+export 'package:drag_and_drop_lists/auto_collapse_config.dart';
+export 'package:drag_and_drop_lists/collapse_state_manager.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_builder_parameters.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_item.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_item_target.dart';
@@ -36,6 +39,14 @@ export 'package:drag_and_drop_lists/drag_and_drop_list_target.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_list_wrapper.dart';
 export 'package:drag_and_drop_lists/drag_handle.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_scroll_controller.dart';
+
+/// Enable/disable logging for debugging drag-drop behavior.
+/// Controlled via [CollapseStateManager.enableLogging].
+void _log(String message) {
+  if (CollapseStateManager.enableLogging) {
+    debugPrint('[DragAndDropLists] $message');
+  }
+}
 
 typedef OnItemReorder = void Function(
   int oldItemIndex,
@@ -289,16 +300,40 @@ class DragAndDropLists extends StatefulWidget {
   /// https://github.com/flutter/flutter/issues/14842#issuecomment-371344881
   final bool removeTopPadding;
 
+  /// Configuration for the auto-collapse feature.
+  ///
+  /// When enabled, lists will automatically collapse when a drag operation
+  /// starts, providing better visibility of drop targets. Lists are restored
+  /// to their previous expansion states when the drag ends.
+  ///
+  /// Use [AutoCollapseConfig] to configure the behavior, or use
+  /// [AutoCollapseConfig.disabled] to disable the feature entirely.
+  ///
+  /// Example:
+  /// ```dart
+  /// DragAndDropLists(
+  ///   autoCollapseConfig: AutoCollapseConfig(
+  ///     enabled: true,
+  ///     collapseOnItemDrag: true,
+  ///     maintainScrollPosition: true,
+  ///   ),
+  ///   // ...
+  /// )
+  /// ```
+  final AutoCollapseConfig autoCollapseConfig;
+
   /// Whether to automatically collapse all lists when a list is being dragged.
-  /// When enabled, all lists will collapse when any list starts dragging,
-  /// and will be restored to their previous expansion states when dragging ends.
-  /// This provides a better UX for list drag and drop by showing only headers.
-  /// Defaults to false.
+  ///
+  /// @Deprecated: Use [autoCollapseConfig] instead for more control.
+  /// This property is maintained for backward compatibility.
+  @Deprecated('Use autoCollapseConfig instead')
   final bool collapseListsOnListDrag;
 
   /// Whether to automatically scroll to the dropped list position after a list
   /// drag ends. Only applies when [collapseListsOnListDrag] is true.
-  /// Defaults to true.
+  ///
+  /// @Deprecated: Use [autoCollapseConfig.scrollToDroppedList] instead.
+  @Deprecated('Use autoCollapseConfig instead')
   final bool scrollToDroppedList;
 
   DragAndDropLists({
@@ -351,7 +386,10 @@ class DragAndDropLists extends StatefulWidget {
     this.itemDragHandle,
     this.constrainDraggingAxis = true,
     this.removeTopPadding = false,
+    this.autoCollapseConfig = AutoCollapseConfig.disabled,
+    @Deprecated('Use autoCollapseConfig instead')
     this.collapseListsOnListDrag = false,
+    @Deprecated('Use autoCollapseConfig instead')
     this.scrollToDroppedList = true,
     super.key,
   }) {
@@ -381,20 +419,78 @@ class DragAndDropListsState extends State<DragAndDropLists> {
   bool _scrolling = false;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
 
-  // State for auto-collapse feature
-  final Map<Key, bool> _savedExpansionStates = {};
-  bool _listsCollapsedForDrag = false;
-  int? _droppedListIndex;
+  /// Manager for the auto-collapse feature.
+  late CollapseStateManager _collapseManager;
+
+  /// Effective auto-collapse config, merging new and deprecated properties.
+  AutoCollapseConfig get _effectiveAutoCollapseConfig {
+    // If new config is explicitly enabled, use it
+    if (widget.autoCollapseConfig.enabled) {
+      return widget.autoCollapseConfig;
+    }
+    // Otherwise, check deprecated property for backward compatibility
+    // ignore: deprecated_member_use_from_same_package
+    if (widget.collapseListsOnListDrag) {
+      return AutoCollapseConfig(
+        enabled: true,
+        // ignore: deprecated_member_use_from_same_package
+        scrollToDroppedList: widget.scrollToDroppedList,
+      );
+    }
+    return AutoCollapseConfig.disabled;
+  }
 
   @override
   void initState() {
+    super.initState();
+
     if (widget.scrollController != null) {
       _scrollController = widget.scrollController;
     } else {
       _scrollController = ScrollController();
     }
 
-    super.initState();
+    _collapseManager = CollapseStateManager(
+      config: _effectiveAutoCollapseConfig,
+      getScrollController: () => _scrollController,
+      getChildren: () => widget.children,
+    );
+  }
+
+  @override
+  void didUpdateWidget(DragAndDropLists oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Update scroll controller if changed
+    if (widget.scrollController != oldWidget.scrollController) {
+      if (widget.scrollController != null) {
+        _scrollController = widget.scrollController;
+      }
+    }
+
+    // Update collapse manager config if needed
+    final newConfig = _effectiveAutoCollapseConfig;
+    if (newConfig.enabled != _collapseManager.config.enabled) {
+      _collapseManager = CollapseStateManager(
+        config: newConfig,
+        getScrollController: () => _scrollController,
+        getChildren: () => widget.children,
+      );
+    }
+
+    // Notify collapse manager that widget tree may have changed
+    // This handles the case where list instances are recreated during drag
+    _collapseManager.onWidgetUpdate();
+  }
+
+  @override
+  void dispose() {
+    _collapseManager.dispose();
+    // Only dispose scroll controller if we created it
+    if (widget.scrollController == null) {
+      _scrollController?.dispose();
+    }
+    super.dispose();
   }
 
   @override
@@ -414,7 +510,7 @@ class DragAndDropListsState extends State<DragAndDropLists> {
       onItemReordered: _internalOnItemReorder,
       onItemDropOnLastTarget: _internalOnItemDropOnLastTarget,
       onListReordered: _internalOnListReorder,
-      onItemDraggingChanged: widget.onItemDraggingChanged,
+      onItemDraggingChanged: _handleItemDraggingChanged,
       onListDraggingChanged: _handleListDraggingChanged,
       listOnWillAccept: widget.listOnWillAccept,
       listTargetOnWillAccept: widget.listTargetOnWillAccept,
@@ -436,6 +532,7 @@ class DragAndDropListsState extends State<DragAndDropLists> {
       itemDragHandle: widget.itemDragHandle,
       constrainDraggingAxis: widget.constrainDraggingAxis,
       disableScrolling: widget.disableScrolling,
+      autoCollapseConfig: _effectiveAutoCollapseConfig,
     );
 
     DragAndDropListTarget dragAndDropListTarget = DragAndDropListTarget(
@@ -610,31 +707,57 @@ class DragAndDropListsState extends State<DragAndDropLists> {
 
   _internalOnListReorder(
       DragAndDropListInterface reordered, DragAndDropListInterface receiver) {
+    _log('_internalOnListReorder() called');
+    _log('  reordered: ${reordered.runtimeType}, key=${reordered.key}');
+    _log('  receiver: ${receiver.runtimeType}, key=${receiver.key}');
+
+    // First try object identity, then fall back to key comparison.
+    // This handles cases where widget rebuilds create new list instances
+    // during drag operations (e.g., due to onWidgetUpdate re-collapse).
     int reorderedListIndex = widget.children.indexWhere((e) => reordered == e);
+    if (reorderedListIndex == -1 && reordered.key != null) {
+      _log('  reordered not found by identity, trying key lookup');
+      reorderedListIndex =
+          widget.children.indexWhere((e) => e.key == reordered.key);
+    }
+
     int receiverListIndex = widget.children.indexWhere((e) => receiver == e);
+    if (receiverListIndex == -1 && receiver.key != null) {
+      _log('  receiver not found by identity, trying key lookup');
+      receiverListIndex =
+          widget.children.indexWhere((e) => e.key == receiver.key);
+    }
+
+    _log(
+        '  reorderedListIndex: $reorderedListIndex, receiverListIndex: $receiverListIndex');
 
     int newListIndex = receiverListIndex;
 
-    if (widget.listOnAccept != null) widget.listOnAccept!(reordered, receiver);
+    if (widget.listOnAccept != null) {
+      _log('  calling widget.listOnAccept');
+      widget.listOnAccept!(reordered, receiver);
+    }
 
     if (reorderedListIndex == -1) {
       // this is a new list
+      _log('  -> NEW LIST, calling widget.onListAdd with index $newListIndex');
       if (widget.onListAdd != null) widget.onListAdd!(reordered, newListIndex);
       // Store the dropped index for scrolling
-      if (widget.collapseListsOnListDrag) {
-        _droppedListIndex = newListIndex;
-      }
+      _collapseManager.droppedListIndex = newListIndex;
     } else {
       if (newListIndex > reorderedListIndex) {
         // same list, so if the new position is after the old position, the removal of the old item must be taken into account
         newListIndex--;
+        _log(
+            '  adjusted newListIndex to $newListIndex (was after old position)');
       }
+      _log(
+          '  -> REORDER, calling widget.onListReorder($reorderedListIndex, $newListIndex)');
       widget.onListReorder(reorderedListIndex, newListIndex);
       // Store the dropped index for scrolling
-      if (widget.collapseListsOnListDrag) {
-        _droppedListIndex = newListIndex;
-      }
+      _collapseManager.droppedListIndex = newListIndex;
     }
+    _log('  _internalOnListReorder() complete');
   }
 
   _internalOnItemDropOnLastTarget(DragAndDropItem newOrReordered,
@@ -686,29 +809,43 @@ class DragAndDropListsState extends State<DragAndDropLists> {
 
   _internalOnListDropOnLastTarget(
       DragAndDropListInterface newOrReordered, DragAndDropListTarget receiver) {
+    _log('_internalOnListDropOnLastTarget() called');
+    _log(
+        '  newOrReordered: ${newOrReordered.runtimeType}, key=${newOrReordered.key}');
+
     // determine if newOrReordered is new or existing
+    // First try object identity, then fall back to key comparison.
     int reorderedListIndex =
         widget.children.indexWhere((e) => newOrReordered == e);
+    if (reorderedListIndex == -1 && newOrReordered.key != null) {
+      _log('  newOrReordered not found by identity, trying key lookup');
+      reorderedListIndex =
+          widget.children.indexWhere((e) => e.key == newOrReordered.key);
+    }
+    _log(
+        '  reorderedListIndex: $reorderedListIndex, children.length: ${widget.children.length}');
 
     if (widget.listOnAccept != null) {
+      _log('  calling widget.listTargetOnAccept');
       widget.listTargetOnAccept!(newOrReordered, receiver);
     }
 
     if (reorderedListIndex >= 0) {
-      widget.onListReorder(reorderedListIndex, widget.children.length - 1);
+      final newIndex = widget.children.length - 1;
+      _log(
+          '  -> REORDER to last, calling widget.onListReorder($reorderedListIndex, $newIndex)');
+      widget.onListReorder(reorderedListIndex, newIndex);
       // Store the dropped index for scrolling (last position)
-      if (widget.collapseListsOnListDrag) {
-        _droppedListIndex = widget.children.length - 1;
-      }
+      _collapseManager.droppedListIndex = newIndex;
     } else {
+      _log('  -> NEW LIST at end, calling widget.onListAdd');
       if (widget.onListAdd != null) {
         widget.onListAdd!(newOrReordered, reorderedListIndex);
       }
       // Store the dropped index for scrolling
-      if (widget.collapseListsOnListDrag) {
-        _droppedListIndex = widget.children.length;
-      }
+      _collapseManager.droppedListIndex = widget.children.length;
     }
+    _log('  _internalOnListDropOnLastTarget() complete');
   }
 
   _onPointerMove(PointerMoveEvent event) {
@@ -879,141 +1016,48 @@ class DragAndDropListsState extends State<DragAndDropLists> {
 
   // Auto-collapse feature methods
 
+  /// Handles list drag state changes and triggers auto-collapse behavior.
   void _handleListDraggingChanged(
       DragAndDropListInterface? list, bool dragging) {
-    debugPrint(
-        '[DragAndDropLists] _handleListDraggingChanged: list=$list, dragging=$dragging');
-    if (widget.collapseListsOnListDrag) {
+    _log('_handleListDraggingChanged() called');
+    _log('  list: ${list?.runtimeType}, key=${list?.key}');
+    _log('  dragging: $dragging');
+    _log('  droppedListIndex before: ${_collapseManager.droppedListIndex}');
+
+    if (list != null) {
       if (dragging) {
-        debugPrint('[DragAndDropLists] Starting drag, collapsing all lists');
-        _collapseAllLists();
+        _log('  -> drag START, calling _collapseManager.onListDragStart()');
+        _collapseManager.onListDragStart(list);
       } else {
-        debugPrint(
-            '[DragAndDropLists] Ending drag, restoring states and scrolling to index $_droppedListIndex');
-        _restoreExpansionStates();
-        if (widget.scrollToDroppedList) {
-          _scrollToDroppedList();
-        }
-        _droppedListIndex = null;
-      }
-    }
-    widget.onListDraggingChanged?.call(list, dragging);
-  }
-
-  void _collapseAllLists() {
-    debugPrint(
-        '[DragAndDropLists] _collapseAllLists called, _listsCollapsedForDrag=$_listsCollapsedForDrag');
-    if (_listsCollapsedForDrag) return;
-
-    _savedExpansionStates.clear();
-
-    for (var i = 0; i < widget.children.length; i++) {
-      var list = widget.children[i];
-      debugPrint(
-          '[DragAndDropLists] Checking list[$i]: type=${list.runtimeType}, key=${list.key}, is DragAndDropListExpansionInterface=${list is DragAndDropListExpansionInterface}');
-      if (list is DragAndDropListExpansionInterface) {
-        debugPrint('[DragAndDropLists] List[$i] isExpanded=${list.isExpanded}');
-        if (list.key != null) {
-          _savedExpansionStates[list.key!] = list.isExpanded;
-        }
-        if (list.isExpanded) {
-          debugPrint('[DragAndDropLists] Collapsing list[$i]');
-          list.collapse();
-        }
-      }
-    }
-
-    _listsCollapsedForDrag = true;
-    debugPrint(
-        '[DragAndDropLists] Saved expansion states: $_savedExpansionStates');
-  }
-
-  void _restoreExpansionStates() {
-    debugPrint(
-        '[DragAndDropLists] _restoreExpansionStates called, _listsCollapsedForDrag=$_listsCollapsedForDrag');
-    if (!_listsCollapsedForDrag) return;
-
-    for (var i = 0; i < widget.children.length; i++) {
-      var list = widget.children[i];
-      if (list is DragAndDropListExpansionInterface && list.key != null) {
-        final wasExpanded = _savedExpansionStates[list.key];
-        debugPrint(
-            '[DragAndDropLists] List[$i] key=${list.key}, wasExpanded=$wasExpanded');
-        if (wasExpanded == true) {
-          debugPrint('[DragAndDropLists] Expanding list[$i]');
-          list.expand();
-        }
-      }
-    }
-
-    _savedExpansionStates.clear();
-    _listsCollapsedForDrag = false;
-  }
-
-  void _scrollToDroppedList() {
-    debugPrint(
-        '[DragAndDropLists] _scrollToDroppedList called, _droppedListIndex=$_droppedListIndex, _scrollController=$_scrollController');
-    if (_droppedListIndex == null || _scrollController == null) {
-      debugPrint(
-          '[DragAndDropLists] Early return: _droppedListIndex or _scrollController is null');
-      return;
-    }
-
-    final droppedIndex = _droppedListIndex!;
-    debugPrint('[DragAndDropLists] droppedIndex=$droppedIndex');
-
-    // Use the custom scroll controller if available
-    if (_scrollController is DragAndDropScrollController) {
-      debugPrint('[DragAndDropLists] Using DragAndDropScrollController');
-      final controller = _scrollController as DragAndDropScrollController;
-      // Update lists reference and scroll to the dropped group
-      controller.updateLists(
-        widget.children,
-        hasListDividers: widget.listDivider != null,
-        listDividerOnLastChild: widget.listDividerOnLastChild,
-      );
-      // Delay slightly to allow expansion animations to start
-      Future.delayed(const Duration(milliseconds: 50), () {
-        controller.scrollToGroup(
-          droppedIndex,
-          alignment: ScrollAlignment.start,
+        _log(
+            '  -> drag END, calling _collapseManager.onListDragEnd(newListIndex: ${_collapseManager.droppedListIndex})');
+        _collapseManager.onListDragEnd(
+          newListIndex: _collapseManager.droppedListIndex,
         );
-      });
+      }
     } else {
-      debugPrint('[DragAndDropLists] Using fallback scroll method');
-      // Fallback: calculate approximate offset and scroll
-      _scrollToListIndex(droppedIndex);
+      _log('  -> list is null, not calling collapse manager');
     }
+    _log('  calling widget.onListDraggingChanged');
+    widget.onListDraggingChanged?.call(list, dragging);
+    _log('  _handleListDraggingChanged() complete');
   }
 
-  void _scrollToListIndex(int index) {
-    if (_scrollController == null || !_scrollController!.hasClients) return;
+  /// Handles item drag state changes and triggers auto-collapse behavior
+  /// if configured.
+  void _handleItemDraggingChanged(DragAndDropItem item, bool dragging) {
+    _log('_handleItemDraggingChanged() called');
+    _log('  item: ${item.runtimeType}, key=${item.key}');
+    _log('  dragging: $dragging');
 
-    // Simple approximation - scroll to bring the list into view
-    // This is a basic implementation; for precise scrolling, use DragAndDropScrollController
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted ||
-          _scrollController == null ||
-          !_scrollController!.hasClients) {
-        return;
-      }
-
-      // Estimate position based on index (rough approximation)
-      // The actual position depends on list heights which we don't know here
-      final maxScroll = _scrollController!.position.maxScrollExtent;
-      final listCount = widget.children.length;
-
-      if (listCount == 0) return;
-
-      // Estimate scroll position proportionally
-      final estimatedOffset = (index / listCount) * maxScroll;
-      final targetOffset = estimatedOffset.clamp(0.0, maxScroll);
-
-      _scrollController!.animateTo(
-        targetOffset,
-        duration: const Duration(milliseconds: 300),
-        curve: Curves.easeInOut,
-      );
-    });
+    if (dragging) {
+      _log('  -> drag START, calling _collapseManager.onItemDragStart()');
+      _collapseManager.onItemDragStart(item);
+    } else {
+      _log('  -> drag END, calling _collapseManager.onItemDragEnd()');
+      _collapseManager.onItemDragEnd();
+    }
+    widget.onItemDraggingChanged?.call(item, dragging);
+    _log('  _handleItemDraggingChanged() complete');
   }
 }

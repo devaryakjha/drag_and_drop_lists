@@ -1,8 +1,17 @@
+import 'package:drag_and_drop_lists/collapse_state_manager.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_builder_parameters.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_interface.dart';
 import 'package:drag_and_drop_lists/drag_handle.dart';
 import 'package:drag_and_drop_lists/measure_size.dart';
 import 'package:flutter/material.dart';
+
+/// Enable/disable logging for debugging drag-drop behavior.
+/// Controlled via [CollapseStateManager.enableLogging].
+void _log(String message) {
+  if (CollapseStateManager.enableLogging) {
+    debugPrint('[ListWrapper] $message');
+  }
+}
 
 class DragAndDropListWrapper extends StatefulWidget {
   final DragAndDropListInterface dragAndDropList;
@@ -165,12 +174,18 @@ class _DragAndDropListWrapper extends State<DragAndDropListWrapper>
               return Container();
             },
             onWillAcceptWithDetails: (details) {
+              _log('DragTarget.onWillAcceptWithDetails called');
+              _log('  incoming: ${details.data.runtimeType}, key=${details.data.key}');
+              _log('  target: ${widget.dragAndDropList.runtimeType}, key=${widget.dragAndDropList.key}');
+
               bool accept = true;
               if (widget.parameters.listOnWillAccept != null) {
                 accept = widget.parameters.listOnWillAccept!(
                     details.data, widget.dragAndDropList);
+                _log('  listOnWillAccept returned: $accept');
               }
               if (accept && mounted) {
+                _log('  -> accepting, setting _hoveredDraggable');
                 setState(() {
                   _hoveredDraggable = details.data;
                 });
@@ -178,8 +193,11 @@ class _DragAndDropListWrapper extends State<DragAndDropListWrapper>
               return accept;
             },
             onLeave: (data) {
+              _log('DragTarget.onLeave called');
+              _log('  data: ${data?.runtimeType}, key=${data?.key}');
               if (_hoveredDraggable != null) {
                 if (mounted) {
+                  _log('  -> clearing _hoveredDraggable');
                   setState(() {
                     _hoveredDraggable = null;
                   });
@@ -187,12 +205,21 @@ class _DragAndDropListWrapper extends State<DragAndDropListWrapper>
               }
             },
             onAcceptWithDetails: (details) {
+              _log('DragTarget.onAcceptWithDetails called - THIS IS THE DROP!');
+              _log('  dropped: ${details.data.runtimeType}, key=${details.data.key}');
+              _log('  onto: ${widget.dragAndDropList.runtimeType}, key=${widget.dragAndDropList.key}');
+              _log('  mounted: $mounted');
+
               if (mounted) {
+                _log('  -> calling onListReordered callback');
                 setState(() {
                   widget.parameters.onListReordered!(
                       details.data, widget.dragAndDropList);
                   _hoveredDraggable = null;
                 });
+                _log('  onAcceptWithDetails complete');
+              } else {
+                _log('  -> NOT calling onListReordered, widget not mounted!');
               }
             },
           ),
@@ -313,14 +340,37 @@ class _DragAndDropListWrapper extends State<DragAndDropListWrapper>
   }
 
   void _setDragging(bool dragging) {
-    if (_dragging != dragging && mounted) {
-      setState(() {
+    _log('_setDragging($dragging) called');
+    _log('  list: ${widget.dragAndDropList.runtimeType}, key=${widget.dragAndDropList.key}');
+    _log('  current _dragging: $_dragging, mounted: $mounted');
+
+    // CRITICAL: Always call the callback when dragging state changes, even if not mounted.
+    // When widget is unmounted during drag (e.g., due to reorder rebuild), we still need
+    // to notify the collapse manager that drag ended, otherwise _draggingList is never
+    // cleared and causes infinite re-collapse loops.
+    if (_dragging != dragging) {
+      _log('  -> changing _dragging from $_dragging to $dragging');
+
+      // Only call setState if mounted (UI update)
+      if (mounted) {
+        setState(() {
+          _dragging = dragging;
+        });
+      } else {
         _dragging = dragging;
-      });
+        _log('  -> (not mounted, skipping setState)');
+      }
+
+      // ALWAYS call the callback to ensure drag end is properly handled
       if (widget.parameters.onListDraggingChanged != null) {
+        _log('  -> calling onListDraggingChanged callback');
         widget.parameters.onListDraggingChanged!(
             widget.dragAndDropList, dragging);
+      } else {
+        _log('  -> onListDraggingChanged is null, not calling');
       }
+    } else {
+      _log('  -> no change needed (_dragging=$_dragging, dragging=$dragging)');
     }
   }
 

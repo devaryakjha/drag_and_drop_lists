@@ -1,7 +1,16 @@
+import 'package:drag_and_drop_lists/collapse_state_manager.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_builder_parameters.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_interface.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/widgets.dart';
+
+/// Enable/disable logging for debugging drag-drop behavior.
+/// Controlled via [CollapseStateManager.enableLogging].
+void _log(String message) {
+  if (CollapseStateManager.enableLogging) {
+    debugPrint('[ListTarget] $message');
+  }
+}
 
 typedef OnDropOnLastTarget = void Function(
   DragAndDropListInterface newOrReordered,
@@ -80,12 +89,17 @@ class _DragAndDropListTarget extends State<DragAndDropListTarget>
               return Container();
             },
             onWillAcceptWithDetails: (details) {
+              _log('onWillAcceptWithDetails called (last target)');
+              _log('  incoming: ${details.data.runtimeType}, key=${details.data.key}');
+
               bool accept = true;
               if (widget.parameters.listTargetOnWillAccept != null) {
                 accept =
                     widget.parameters.listTargetOnWillAccept!(details.data, widget);
+                _log('  listTargetOnWillAccept returned: $accept');
               }
               if (accept && mounted) {
+                _log('  -> accepting, setting _hoveredDraggable');
                 setState(() {
                   _hoveredDraggable = details.data;
                 });
@@ -93,6 +107,8 @@ class _DragAndDropListTarget extends State<DragAndDropListTarget>
               return accept;
             },
             onLeave: (data) {
+              _log('onLeave called (last target)');
+              _log('  data: ${data?.runtimeType}, key=${data?.key}');
               if (mounted) {
                 setState(() {
                   _hoveredDraggable = null;
@@ -100,11 +116,19 @@ class _DragAndDropListTarget extends State<DragAndDropListTarget>
               }
             },
             onAcceptWithDetails: (details) {
+              _log('onAcceptWithDetails called (last target) - THIS IS THE DROP!');
+              _log('  dropped: ${details.data.runtimeType}, key=${details.data.key}');
+              _log('  mounted: $mounted');
+
               if (mounted) {
+                _log('  -> calling onDropOnLastTarget callback');
                 setState(() {
                   widget.onDropOnLastTarget(details.data, widget);
                   _hoveredDraggable = null;
                 });
+                _log('  onAcceptWithDetails complete');
+              } else {
+                _log('  -> NOT calling onDropOnLastTarget, widget not mounted!');
               }
             },
           ),

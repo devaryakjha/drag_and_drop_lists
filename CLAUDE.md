@@ -114,6 +114,51 @@ The project uses FVM (Flutter Version Manager) with the stable channel. The conf
 
 - **Auto-scrolling**: The widget automatically scrolls lists when dragging near the edges. Scrolling can be disabled by setting `disableScrolling: true`.
 
+- **Auto-collapse on Drag**: Lists can automatically collapse when a drag operation starts, making it easier to see drop targets. Configure via `autoCollapseConfig`. Lists are restored to their previous expansion states when the drag ends.
+
+## Auto-Collapse Feature
+
+The auto-collapse feature provides a better UX for list drag-and-drop by collapsing expanded lists when a drag starts. This is managed by `CollapseStateManager` with configuration via `AutoCollapseConfig`.
+
+### Key Classes
+
+- **AutoCollapseConfig** (`auto_collapse_config.dart`): Configuration for auto-collapse behavior:
+  - `enabled`: Whether auto-collapse is active
+  - `collapseOnItemDrag`: Also collapse when dragging items (not just lists)
+  - `maintainScrollPosition`: Adjust scroll to keep context during collapse
+  - `excludeDraggingList`: Don't collapse the list being dragged
+  - `scrollToDroppedList`: Scroll to show the dropped list after drag ends
+  - `staggerCollapseAnimations`: Cascade collapse animations for visual effect
+
+- **CollapseStateManager** (`collapse_state_manager.dart`): Internal state manager that:
+  - Tracks expansion states before collapse (by key or index)
+  - Handles smooth collapse/restore with proper timing
+  - Manages scroll-to-dropped-list behavior
+  - Works robustly even when lists are reordered during drag
+
+### Usage Example
+
+```dart
+DragAndDropLists(
+  autoCollapseConfig: AutoCollapseConfig(
+    enabled: true,
+    collapseOnItemDrag: false,  // Only collapse on list drag
+    maintainScrollPosition: true,
+    scrollToDroppedList: true,
+    scrollAlignment: ScrollToAlignment.start,
+  ),
+  // ... other properties
+)
+```
+
+### Edge Cases Handled
+
+- **Large lists**: Lists bigger than viewport collapse smoothly with scroll position management
+- **Lists without keys**: State saved by index as fallback
+- **Reordering during drag**: State restoration handles index changes
+- **Rapid drag operations**: Debounced with configurable delay
+- **Mixed list types**: Works with both `DragAndDropList` and `DragAndDropListExpansion`
+
 ## Common Extension Points
 
 - **Custom List Layouts**: Create new classes inheriting from `DragAndDropListInterface` with different `generateWidget()` implementations

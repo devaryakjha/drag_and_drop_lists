@@ -108,7 +108,8 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
           contents.add(Flexible(child: header!));
         }
 
-        // Only show the list content when expanded
+        // Build expandable content with animation
+        Widget? expandableContent;
         if (expanded) {
           Widget intrinsicHeight = IntrinsicHeight(
             child: Row(
@@ -130,11 +131,22 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
               child: intrinsicHeight,
             );
           }
-          contents.add(intrinsicHeight);
+          expandableContent = intrinsicHeight;
+        }
 
-          if (footer != null) {
-            contents.add(Flexible(child: footer!));
-          }
+        // Wrap in AnimatedSize for smooth collapse/expand animation
+        contents.add(
+          AnimatedSize(
+            duration: params.autoCollapseConfig.collapseAnimationDuration,
+            reverseDuration: params.autoCollapseConfig.expandAnimationDuration,
+            curve: Curves.easeInOut,
+            alignment: Alignment.bottomCenter,
+            child: expandableContent ?? const SizedBox.shrink(),
+          ),
+        );
+
+        if (expanded && footer != null) {
+          contents.add(Flexible(child: footer!));
         }
 
         return Container(

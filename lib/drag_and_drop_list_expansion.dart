@@ -211,19 +211,21 @@ class DragAndDropListExpansion implements DragAndDropListExpansionInterface {
   @override
   get isExpanded => _expanded.value;
 
-  late Timer _expansionTimer;
+  Timer? _expansionTimer;
 
-  _startExpansionTimer() async {
-    _expansionTimer = Timer(const Duration(milliseconds: 400), _expansionCallback);
+  void _startExpansionTimer() {
+    // Cancel any existing timer first
+    _stopExpansionTimer();
+    _expansionTimer =
+        Timer(const Duration(milliseconds: 400), _expansionCallback);
   }
 
-  _stopExpansionTimer() async {
-    if (_expansionTimer.isActive) {
-      _expansionTimer.cancel();
-    }
+  void _stopExpansionTimer() {
+    _expansionTimer?.cancel();
+    _expansionTimer = null;
   }
 
-  _expansionCallback() {
+  void _expansionCallback() {
     expand();
   }
 }
