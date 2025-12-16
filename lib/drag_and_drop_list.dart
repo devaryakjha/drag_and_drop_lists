@@ -56,7 +56,7 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
   final bool initiallyExpanded;
 
   // Expansion state
-  final ValueNotifier<bool> _expanded = ValueNotifier<bool>(true);
+  final ValueNotifier<bool> _expanded;
 
   @override
   bool get isExpanded => _expanded.value;
@@ -94,9 +94,8 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
     this.verticalAlignment = CrossAxisAlignment.start,
     this.canDrag = true,
     this.initiallyExpanded = true,
-  }) {
-    _expanded.value = initiallyExpanded;
-  }
+    ValueNotifier<bool>? expandedNotifier,
+  }) : _expanded = expandedNotifier ?? ValueNotifier<bool>(initiallyExpanded);
 
   @override
   Widget generateWidget(DragAndDropBuilderParameters params) {
@@ -140,7 +139,7 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
             duration: params.autoCollapseConfig.collapseAnimationDuration,
             reverseDuration: params.autoCollapseConfig.expandAnimationDuration,
             curve: Curves.easeInOut,
-            alignment: Alignment.bottomCenter,
+            alignment: Alignment.centerRight,
             child: expandableContent ?? const SizedBox.shrink(),
           ),
         );
