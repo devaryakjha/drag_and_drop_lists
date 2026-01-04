@@ -162,6 +162,66 @@ DragAndDropLists(
 - **Rapid drag operations**: Debounced with configurable delay
 - **Mixed list types**: Works with both `DragAndDropList` and `DragAndDropListExpansion`
 
+## Pinned Headers Feature
+
+The package supports pinned headers that push each other as you scroll, similar to the `sliver_tools` package's `MultiSliver` with `pushPinnedChildren`.
+
+### Usage
+
+```dart
+DragAndDropLists(
+  children: _contents,
+  onItemReorder: _onItemReorder,
+  onListReorder: _onListReorder,
+  sliverList: true,
+  scrollController: _scrollController,
+  pushPinnedHeaders: true,  // Enable pinned headers
+  // Optional animation configuration
+  itemAnimationDuration: Duration(milliseconds: 300),
+  itemAnimationCurve: Curves.easeInOut,
+)
+```
+
+### Requirements
+
+- Must use `sliverList: true`
+- Must provide a `scrollController`
+- Each `DragAndDropList` must have a `header` widget for pinning
+
+### How It Works
+
+When `pushPinnedHeaders` is enabled:
+1. Each list's header is wrapped in a `SliverPinnedHeader`
+2. As you scroll, headers stick to the top of the viewport
+3. When a new header reaches the top, it pushes the previous header up
+4. Drag-and-drop operations work seamlessly with pinned headers
+
+### Example
+
+See `example/lib/pinned_headers_example.dart` for a complete implementation.
+
+## Animated Item Operations
+
+The package provides infrastructure for animated item insertions and removals:
+
+### AnimatedListController
+
+```dart
+import 'package:drag_and_drop_lists/drag_and_drop_lists.dart';
+
+final controller = AnimatedListController(
+  defaultDuration: Duration(milliseconds: 300),
+);
+
+// Insert item with animation
+controller.insertItem(index);
+
+// Remove item with animation
+controller.removeItem(index, (context, animation) =>
+  widget.animateRemoval(animation)
+);
+```
+
 ## Common Extension Points
 
 - **Custom List Layouts**: Create new classes inheriting from `DragAndDropListInterface` with different `generateWidget()` implementations

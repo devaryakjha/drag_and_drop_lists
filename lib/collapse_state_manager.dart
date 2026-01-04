@@ -371,7 +371,7 @@ class CollapseStateManager {
 
     // Restore expansion states
     _log('  restoring ${listsToRestore.length} lists (stagger: ${config.staggerCollapseAnimations})');
-    if (config.staggerCollapseAnimations) {
+    if (config.staggerCollapseAnimations && listsToRestore.isNotEmpty) {
       for (var i = 0; i < listsToRestore.length; i++) {
         _log('    expanding list $i');
         listsToRestore[i].expand();
@@ -379,15 +379,21 @@ class CollapseStateManager {
           await Future.delayed(config.staggerDelay);
         }
       }
+      // Wait for the LAST animation to complete
+      // The last list started after (numLists - 1) * staggerDelay,
+      // and needs expandAnimationDuration to finish
+      _log('  waiting for last animation to complete (${config.expandAnimationDuration})');
+      await Future.delayed(config.expandAnimationDuration);
     } else {
       for (final list in listsToRestore) {
         list.expand();
       }
+      // Wait for animations to complete (all started simultaneously)
+      if (listsToRestore.isNotEmpty) {
+        _log('  waiting for animation (${config.expandAnimationDuration})');
+        await Future.delayed(config.expandAnimationDuration);
+      }
     }
-
-    // Wait for animations to complete
-    _log('  waiting for animation (${config.expandAnimationDuration})');
-    await Future.delayed(config.expandAnimationDuration);
 
     // Scroll to dropped list if configured
     if (config.scrollToDroppedList && droppedListIndex != null) {

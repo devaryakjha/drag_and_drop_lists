@@ -87,11 +87,13 @@ class _DragAndDropItemWrapper extends State<DragAndDropItemWrapper>
               onDragEnd: (_) => _setDragging(false),
               child: MeasureSize(
                 onSizeChange: (size) {
-                  setState(() {
-                    _dragHandleSize = size!;
-                  });
+                  if (mounted) {
+                    setState(() {
+                      _dragHandleSize = size!;
+                    });
+                  }
                 },
-                child: widget.parameters!.itemDragHandle,
+                child: widget.parameters!.itemDragHandle!,
               ),
             ),
           ),
@@ -105,7 +107,6 @@ class _DragAndDropItemWrapper extends State<DragAndDropItemWrapper>
                 visible: !_dragging,
                 child: widget.child.child,
               ),
-              // dragAndDropListContents,
               positionedDragHandle,
             ],
           ),
@@ -176,7 +177,7 @@ class _DragAndDropItemWrapper extends State<DragAndDropItemWrapper>
       draggable = AnimatedSize(
         duration: Duration(
             milliseconds: widget.parameters!.itemSizeAnimationDuration),
-        alignment: Alignment.bottomCenter,
+        alignment: Alignment.topCenter,
         child: _hoveredDraggable != null ? Container() : widget.child.child,
       );
     }
@@ -189,7 +190,7 @@ class _DragAndDropItemWrapper extends State<DragAndDropItemWrapper>
             AnimatedSize(
               duration: Duration(
                   milliseconds: widget.parameters!.itemSizeAnimationDuration),
-              alignment: Alignment.topLeft,
+              alignment: Alignment.topCenter,
               child: _hoveredDraggable != null
                   ? Opacity(
                       opacity: widget.parameters!.itemGhostOpacity,

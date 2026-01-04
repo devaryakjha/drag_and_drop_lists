@@ -39,6 +39,7 @@ export 'package:drag_and_drop_lists/drag_and_drop_list_target.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_list_wrapper.dart';
 export 'package:drag_and_drop_lists/drag_handle.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_scroll_controller.dart';
+export 'package:drag_and_drop_lists/src/animated_list_controller.dart';
 
 /// Enable/disable logging for debugging drag-drop behavior.
 /// Controlled via [CollapseStateManager.enableLogging].
@@ -592,7 +593,7 @@ class DragAndDropListsState extends State<DragAndDropLists> {
     }
   }
 
-  SliverList _buildSliverList(DragAndDropListTarget dragAndDropListTarget,
+  Widget _buildSliverList(DragAndDropListTarget dragAndDropListTarget,
       DragAndDropBuilderParameters parameters) {
     bool includeSeparators = widget.listDivider != null;
     int childrenCount = _calculateChildrenCount(includeSeparators);

@@ -55,9 +55,11 @@ class _DragAndDropListWrapper extends State<DragAndDropListWrapper>
 
         draggable = MeasureSize(
           onSizeChange: (size) {
-            setState(() {
-              _containerSize = size!;
-            });
+            if (mounted) {
+              setState(() {
+                _containerSize = size!;
+              });
+            }
           },
           child: Stack(
             children: [
@@ -65,7 +67,6 @@ class _DragAndDropListWrapper extends State<DragAndDropListWrapper>
                 visible: !_dragging,
                 child: dragAndDropListContents,
               ),
-              // dragAndDropListContents,
               Positioned(
                 right: widget.parameters.listDragHandle!.onLeft ? null : 0,
                 left: widget.parameters.listDragHandle!.onLeft ? 0 : null,
@@ -84,9 +85,11 @@ class _DragAndDropListWrapper extends State<DragAndDropListWrapper>
                   onDragEnd: (_) => _setDragging(false),
                   child: MeasureSize(
                     onSizeChange: (size) {
-                      setState(() {
-                        _dragHandleSize = size!;
-                      });
+                      if (mounted) {
+                        setState(() {
+                          _dragHandleSize = size!;
+                        });
+                      }
                     },
                     child: dragHandle,
                   ),
@@ -131,7 +134,7 @@ class _DragAndDropListWrapper extends State<DragAndDropListWrapper>
         duration:
             Duration(milliseconds: widget.parameters.listSizeAnimationDuration),
         alignment: widget.parameters.axis == Axis.vertical
-            ? Alignment.bottomCenter
+            ? Alignment.topCenter
             : Alignment.centerLeft,
         child: _hoveredDraggable != null
             ? Opacity(

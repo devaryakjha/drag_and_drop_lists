@@ -46,7 +46,7 @@ class _DragAndDropListTarget extends State<DragAndDropListTarget>
           duration: Duration(
               milliseconds: widget.parameters.listSizeAnimationDuration),
           alignment: widget.parameters.axis == Axis.vertical
-              ? Alignment.bottomCenter
+              ? Alignment.topCenter
               : Alignment.centerLeft,
           child: _hoveredDraggable != null
               ? Opacity(

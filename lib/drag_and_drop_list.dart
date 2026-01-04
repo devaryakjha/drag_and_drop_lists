@@ -107,40 +107,47 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
           contents.add(Flexible(child: header!));
         }
 
-        // Build expandable content with animation
-        Widget? expandableContent;
-        if (expanded) {
-          Widget intrinsicHeight = IntrinsicHeight(
-            child: Row(
-              mainAxisAlignment: horizontalAlignment,
-              mainAxisSize: MainAxisSize.max,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: _generateDragAndDropListInnerContents(params),
-            ),
+        // Build expandable content - always build it so width stays constant
+        Widget expandableContent = IntrinsicHeight(
+          child: Row(
+            mainAxisAlignment: horizontalAlignment,
+            mainAxisSize: MainAxisSize.max,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: _generateDragAndDropListInnerContents(params),
+          ),
+        );
+        if (params.axis == Axis.horizontal) {
+          expandableContent = SizedBox(
+            width: params.listWidth,
+            child: expandableContent,
           );
-          if (params.axis == Axis.horizontal) {
-            intrinsicHeight = SizedBox(
-              width: params.listWidth,
-              child: intrinsicHeight,
-            );
-          }
-          if (params.listInnerDecoration != null) {
-            intrinsicHeight = Container(
-              decoration: params.listInnerDecoration,
-              child: intrinsicHeight,
-            );
-          }
-          expandableContent = intrinsicHeight;
+        }
+        if (params.listInnerDecoration != null) {
+          expandableContent = Container(
+            decoration: params.listInnerDecoration,
+            child: expandableContent,
+          );
         }
 
-        // Wrap in AnimatedSize for smooth collapse/expand animation
+        // Use TweenAnimationBuilder to animate heightFactor for smooth collapse/expand.
+        // This ensures content is gradually revealed/hidden, not instantly clipped.
         contents.add(
-          AnimatedSize(
-            duration: params.autoCollapseConfig.collapseAnimationDuration,
-            reverseDuration: params.autoCollapseConfig.expandAnimationDuration,
+          TweenAnimationBuilder<double>(
+            tween: Tween<double>(end: expanded ? 1.0 : 0.0),
+            duration: expanded
+                ? params.autoCollapseConfig.expandAnimationDuration
+                : params.autoCollapseConfig.collapseAnimationDuration,
             curve: Curves.easeInOut,
-            alignment: Alignment.centerRight,
-            child: expandableContent ?? const SizedBox.shrink(),
+            builder: (context, heightFactor, child) {
+              return ClipRect(
+                child: Align(
+                  alignment: Alignment.topCenter,
+                  heightFactor: heightFactor,
+                  child: child,
+                ),
+              );
+            },
+            child: expandableContent,
           ),
         );
 
