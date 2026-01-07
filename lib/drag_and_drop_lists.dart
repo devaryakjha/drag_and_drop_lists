@@ -21,11 +21,13 @@ import 'package:drag_and_drop_lists/drag_and_drop_item.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_item_target.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_interface.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_target.dart';
+import 'package:drag_and_drop_lists/drag_and_drop_list_sliver_wrapper.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_wrapper.dart';
 import 'package:drag_and_drop_lists/drag_handle.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/widgets.dart';
+import 'package:sliver_tools/sliver_tools.dart';
 
 export 'package:drag_and_drop_lists/auto_collapse_config.dart';
 export 'package:drag_and_drop_lists/collapse_state_manager.dart';
@@ -35,6 +37,7 @@ export 'package:drag_and_drop_lists/drag_and_drop_item_target.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_item_wrapper.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_list.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_list_expansion.dart';
+export 'package:drag_and_drop_lists/drag_and_drop_list_sliver_wrapper.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_list_target.dart';
 export 'package:drag_and_drop_lists/drag_and_drop_list_wrapper.dart';
 export 'package:drag_and_drop_lists/drag_handle.dart';
@@ -273,6 +276,16 @@ class DragAndDropLists extends StatefulWidget {
   /// Set to false if using in a widget only.
   final bool sliverList;
 
+  /// Whether to pin list headers when using sliver mode.
+  ///
+  /// When true and [sliverList] is true, each list's header will pin to the top
+  /// of the viewport while scrolling, and multiple pinned headers will stack
+  /// and push each other (similar to iOS-style grouped lists).
+  ///
+  /// This requires each list to have a header widget defined.
+  /// Defaults to false for backward compatibility.
+  final bool pinnedHeaders;
+
   /// A scroll controller that can be used for the scrolling of the first level lists.
   /// This must be set if [sliverList] is set to true.
   final ScrollController? scrollController;
@@ -394,6 +407,7 @@ class DragAndDropLists extends StatefulWidget {
     this.horizontalAlignment = MainAxisAlignment.start,
     this.axis = Axis.vertical,
     this.sliverList = false,
+    this.pinnedHeaders = false,
     this.scrollController,
     this.disableScrolling = false,
     this.listDragHandle,
@@ -421,6 +435,10 @@ class DragAndDropLists extends StatefulWidget {
     if (axis == Axis.horizontal && sliverList) {
       throw Exception(
           'Combining a sliver list with a horizontal list is currently unsupported');
+    }
+    if (pinnedHeaders && !sliverList) {
+      throw Exception(
+          'pinnedHeaders requires sliverList to be true');
     }
   }
 
@@ -563,7 +581,9 @@ class DragAndDropListsState extends State<DragAndDropLists> {
       Widget outerListHolder;
 
       if (widget.sliverList) {
-        outerListHolder = _buildSliverList(dragAndDropListTarget, parameters);
+        outerListHolder = widget.pinnedHeaders
+            ? _buildPinnedHeaderSliverList(dragAndDropListTarget, parameters)
+            : _buildSliverList(dragAndDropListTarget, parameters);
       } else if (widget.disableScrolling) {
         outerListHolder =
             _buildUnscrollableList(dragAndDropListTarget, parameters);
@@ -606,6 +626,57 @@ class DragAndDropListsState extends State<DragAndDropLists> {
         },
         childCount: childrenCount,
       ),
+    );
+  }
+
+  /// Builds a sliver list with pinned headers.
+  ///
+  /// Each list is rendered as a [MultiSliver] containing:
+  /// - A [SliverPinnedHeader] for the list header
+  /// - A [SliverToBoxAdapter] for the body content
+  ///
+  /// All lists are wrapped in a parent [MultiSliver] with `pushPinnedChildren: true`
+  /// which causes pinned headers to stack and push each other.
+  Widget _buildPinnedHeaderSliverList(
+    DragAndDropListTarget dragAndDropListTarget,
+    DragAndDropBuilderParameters parameters,
+  ) {
+    final children = <Widget>[];
+
+    for (int i = 0; i < widget.children.length; i++) {
+      // Add divider between lists if configured
+      if (widget.listDivider != null && i > 0) {
+        children.add(SliverToBoxAdapter(child: widget.listDivider!));
+      }
+
+      // Add padding wrapper if configured
+      Widget listSection = DragAndDropListSliverWrapper(
+        key: widget.children[i].key,
+        dragAndDropList: widget.children[i],
+        parameters: parameters,
+      );
+
+      if (widget.listPadding != null) {
+        listSection = SliverPadding(
+          padding: widget.listPadding!,
+          sliver: listSection,
+        );
+      }
+
+      children.add(listSection);
+    }
+
+    // Add divider before last target if configured
+    if (widget.listDivider != null && widget.listDividerOnLastChild) {
+      children.add(SliverToBoxAdapter(child: widget.listDivider!));
+    }
+
+    // Add the drop target for adding lists at the end
+    children.add(SliverToBoxAdapter(child: dragAndDropListTarget));
+
+    return MultiSliver(
+      pushPinnedChildren: true,
+      children: children,
     );
   }
 

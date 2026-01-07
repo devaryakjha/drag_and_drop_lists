@@ -1,6 +1,7 @@
 import 'package:drag_and_drop_lists/drag_and_drop_builder_parameters.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_interface.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_item.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 abstract class DragAndDropListInterface implements DragAndDropInterface {
@@ -22,6 +23,10 @@ abstract class DragAndDropListExpansionInterface
   DragAndDropListExpansionInterface({this.children});
 
   bool get isExpanded;
+
+  /// Returns a listenable that notifies when expansion state changes.
+  /// This allows external widgets to rebuild when the list expands/collapses.
+  ValueListenable<bool>? get expansionListenable => null;
 
   void toggleExpanded();
 

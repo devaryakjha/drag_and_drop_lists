@@ -6,6 +6,7 @@ import 'package:drag_and_drop_lists/drag_and_drop_item_target.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_item_wrapper.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_list_interface.dart';
 import 'package:drag_and_drop_lists/programmatic_expansion_tile.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 typedef OnExpansionChanged = void Function(bool expanded);
@@ -210,6 +211,9 @@ class DragAndDropListExpansion implements DragAndDropListExpansionInterface {
 
   @override
   get isExpanded => _expanded.value;
+
+  @override
+  ValueListenable<bool> get expansionListenable => _expanded;
 
   Timer? _expansionTimer;
 
