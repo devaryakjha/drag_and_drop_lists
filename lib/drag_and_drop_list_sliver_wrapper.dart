@@ -62,9 +62,8 @@ class _DragAndDropListSliverWrapperState
     final params = widget.parameters;
 
     // Initialize animation controller
-    final isExpanded = list is DragAndDropListExpansionInterface
-        ? list.isExpanded
-        : true;
+    final isExpanded =
+        list is DragAndDropListExpansionInterface ? list.isExpanded : true;
 
     _expandController = AnimationController(
       duration: params.autoCollapseConfig.expandAnimationDuration,
@@ -110,9 +109,12 @@ class _DragAndDropListSliverWrapperState
     }
 
     // Update animation durations if parameters changed
-    if (oldWidget.parameters.autoCollapseConfig != newParams.autoCollapseConfig) {
-      _expandController.duration = newParams.autoCollapseConfig.expandAnimationDuration;
-      _expandController.reverseDuration = newParams.autoCollapseConfig.collapseAnimationDuration;
+    if (oldWidget.parameters.autoCollapseConfig !=
+        newParams.autoCollapseConfig) {
+      _expandController.duration =
+          newParams.autoCollapseConfig.expandAnimationDuration;
+      _expandController.reverseDuration =
+          newParams.autoCollapseConfig.collapseAnimationDuration;
     }
   }
 
@@ -219,12 +221,14 @@ class _DragAndDropListSliverWrapperState
                 return const SizedBox.shrink();
               },
               onWillAcceptWithDetails: (details) {
-                _log('Header DragTarget<Item>.onWillAcceptWithDetails - starting expansion timer');
+                _log(
+                    'Header DragTarget<Item>.onWillAcceptWithDetails - starting expansion timer');
                 _startExpansionTimer();
                 return false;
               },
               onLeave: (data) {
-                _log('Header DragTarget<Item>.onLeave - stopping expansion timer');
+                _log(
+                    'Header DragTarget<Item>.onLeave - stopping expansion timer');
                 _stopExpansionTimer();
               },
               onAcceptWithDetails: (details) {},
@@ -279,6 +283,7 @@ class _DragAndDropListSliverWrapperState
     if (decoration != null) {
       sliver = DecoratedSliver(
         decoration: decoration,
+        position: DecorationPosition.foreground,
         sliver: sliver,
       );
     }
@@ -324,7 +329,8 @@ class _DragAndDropListSliverWrapperState
             },
             onWillAcceptWithDetails: (details) {
               _log('DragTarget.onWillAcceptWithDetails');
-              _log('  incoming: ${details.data.runtimeType}, key=${details.data.key}');
+              _log(
+                  '  incoming: ${details.data.runtimeType}, key=${details.data.key}');
               _log('  target: ${list.runtimeType}, key=${list.key}');
 
               // Cancel any pending leave - we're still hovering over this list
@@ -360,7 +366,8 @@ class _DragAndDropListSliverWrapperState
             },
             onAcceptWithDetails: (details) {
               _log('DragTarget.onAcceptWithDetails - DROP');
-              _log('  dropped: ${details.data.runtimeType}, key=${details.data.key}');
+              _log(
+                  '  dropped: ${details.data.runtimeType}, key=${details.data.key}');
               _log('  onto: ${list.runtimeType}, key=${list.key}');
               _leaveDebounceTimer?.cancel();
               if (mounted) {
@@ -678,12 +685,14 @@ class _DragAndDropListSliverWrapperState
                 return const SizedBox.shrink();
               },
               onWillAcceptWithDetails: (details) {
-                _log('Collapsed body DragTarget<Item>.onWillAcceptWithDetails - starting expansion timer');
+                _log(
+                    'Collapsed body DragTarget<Item>.onWillAcceptWithDetails - starting expansion timer');
                 _startExpansionTimer();
                 return false; // Don't accept here, let it expand first
               },
               onLeave: (data) {
-                _log('Collapsed body DragTarget<Item>.onLeave - stopping expansion timer');
+                _log(
+                    'Collapsed body DragTarget<Item>.onLeave - stopping expansion timer');
                 _stopExpansionTimer();
               },
               onAcceptWithDetails: (details) {},
