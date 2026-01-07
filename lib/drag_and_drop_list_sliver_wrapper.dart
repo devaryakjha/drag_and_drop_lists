@@ -406,29 +406,46 @@ class _DragAndDropListSliverWrapperState
     DragAndDropBuilderParameters params,
   ) {
     Widget? contentsWhenEmpty;
-    Widget? lastTarget;
 
     try {
       final dynamic dynamicList = list;
       contentsWhenEmpty = dynamicList.contentsWhenEmpty as Widget?;
-      lastTarget = dynamicList.lastTarget as Widget?;
     } catch (_) {}
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        contentsWhenEmpty ??
-            const Text(
-              'Empty list',
-              style: TextStyle(fontStyle: FontStyle.italic),
-            ),
-        DragAndDropItemTarget(
-          parent: list,
-          parameters: params,
-          onReorderOrAdd: params.onItemDropOnLastTarget!,
-          child: lastTarget ?? SizedBox(height: params.lastItemTargetHeight),
-        ),
-      ],
+    // Wrap entire empty content in DragTarget so the whole area is droppable
+    // No lastTarget needed - the whole area is the drop zone
+    return DragTarget<DragAndDropItem>(
+      builder: (context, candidateData, rejectedData) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            contentsWhenEmpty ??
+                const Text(
+                  'Empty list',
+                  style: TextStyle(fontStyle: FontStyle.italic),
+                ),
+            // Show ghost when item is hovering
+            if (candidateData.isNotEmpty)
+              Opacity(
+                opacity: params.itemGhostOpacity,
+                child: params.itemGhost ?? candidateData.first!.child,
+              ),
+          ],
+        );
+      },
+      onWillAcceptWithDetails: (details) => true,
+      onAcceptWithDetails: (details) {
+        params.onItemDropOnLastTarget?.call(
+          details.data,
+          list,
+          DragAndDropItemTarget(
+            parent: list,
+            parameters: params,
+            onReorderOrAdd: params.onItemDropOnLastTarget!,
+            child: const SizedBox.shrink(),
+          ),
+        );
+      },
     );
   }
 
