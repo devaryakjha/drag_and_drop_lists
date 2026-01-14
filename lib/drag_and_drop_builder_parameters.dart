@@ -47,6 +47,7 @@ class DragAndDropBuilderParameters {
   final double listGhostOpacity;
   final EdgeInsets? listPadding;
   final Decoration? listDecoration;
+  final Decoration? listForegroundDecoration;
   final Decoration? listDecorationWhileDragging;
   final Decoration? listInnerDecoration;
   final double listWidth;
@@ -86,6 +87,7 @@ class DragAndDropBuilderParameters {
     this.listGhost,
     this.listPadding,
     this.listDecoration,
+    this.listForegroundDecoration,
     this.listDecorationWhileDragging,
     this.listInnerDecoration,
     this.listWidth = double.infinity,

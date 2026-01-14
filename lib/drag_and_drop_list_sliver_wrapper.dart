@@ -246,6 +246,13 @@ class _DragAndDropListSliverWrapperState
     } catch (_) {}
     decoration ??= params.listDecoration;
 
+    Decoration? foregroundDecoration;
+    try {
+      final dynamic dynamicList = list;
+      foregroundDecoration = dynamicList.foregroundDecoration as Decoration?;
+    } catch (_) {}
+    foregroundDecoration ??= params.listForegroundDecoration;
+
     Widget sliver = MultiSliver(
       pushPinnedChildren: true,
       children: [
@@ -283,9 +290,17 @@ class _DragAndDropListSliverWrapperState
     if (decoration != null) {
       sliver = DecoratedSliver(
         decoration: decoration,
-        position: DecorationPosition.foreground,
+        position: DecorationPosition.background,
         sliver: sliver,
       );
+
+      if (foregroundDecoration != null) {
+        sliver = DecoratedSliver(
+          decoration: foregroundDecoration,
+          position: DecorationPosition.foreground,
+          sliver: sliver,
+        );
+      }
     }
 
     return sliver;

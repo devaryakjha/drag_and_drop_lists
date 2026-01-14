@@ -32,6 +32,10 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
   /// If this is not null, it will override that set in [DragAndDropLists.listDecoration].
   final Decoration? decoration;
 
+  /// The decoration displayed in front of a list.
+  /// If this is not null, it will override that set in [DragAndDropLists.listForegroundDecoration].
+  final Decoration? foregroundDecoration;
+
   /// The vertical alignment of the contents in this list.
   /// If this is not null, it will override that set in [DragAndDropLists.verticalAlignment].
   final CrossAxisAlignment verticalAlignment;
@@ -94,6 +98,7 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
     this.contentsWhenEmpty,
     this.lastTarget,
     this.decoration,
+    this.foregroundDecoration,
     this.horizontalAlignment = MainAxisAlignment.start,
     this.verticalAlignment = CrossAxisAlignment.start,
     this.canDrag = true,
@@ -165,6 +170,8 @@ class DragAndDropList implements DragAndDropListExpansionInterface {
               ? double.infinity
               : params.listWidth - params.listPadding!.horizontal,
           decoration: decoration ?? params.listDecoration,
+          foregroundDecoration:
+              foregroundDecoration ?? params.listForegroundDecoration,
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: verticalAlignment,
