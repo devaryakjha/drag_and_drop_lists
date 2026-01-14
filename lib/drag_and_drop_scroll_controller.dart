@@ -171,7 +171,7 @@ class DragAndDropScrollController extends ScrollController {
         _applyAlignment(offset, groupHeight, alignment, effectiveTopOffset);
     final clampedOffset = adjustedOffset.clamp(
       position.minScrollExtent,
-      double.infinity,
+      position.maxScrollExtent,
     );
 
     await animateTo(
@@ -232,7 +232,7 @@ class DragAndDropScrollController extends ScrollController {
         offset, config.itemHeight, alignment, effectiveTopOffset);
     final clampedOffset = adjustedOffset.clamp(
       position.minScrollExtent,
-      double.infinity,
+      position.maxScrollExtent,
     );
 
     await animateTo(
@@ -330,8 +330,9 @@ class DragAndDropScrollController extends ScrollController {
 
   /// Applies alignment adjustment to the calculated offset.
   ///
-  /// [topOffset] is subtracted to account for pinned headers, ensuring the
-  /// target appears in the visible area below any pinned elements.
+  /// [targetOffset] is the offset from the start of the groups content.
+  /// [topOffset] is the height of content before the groups (e.g., pinned headers).
+  /// The actual position in the scroll extent is (topOffset + targetOffset).
   double _applyAlignment(
     double targetOffset,
     double targetHeight,
@@ -343,19 +344,25 @@ class DragAndDropScrollController extends ScrollController {
     final viewportDimension = position.viewportDimension;
     final effectiveViewport = viewportDimension - topOffset;
 
+    // Actual position in scroll extent = topOffset + targetOffset
+    // For pinned headers, content at scrollOffset appears at viewport Y = 0,
+    // but the pinned area occupies viewport Y = 0 to topOffset.
+    // So content at scrollOffset + topOffset appears at viewport Y = topOffset.
+
     switch (alignment) {
       case ScrollAlignment.start:
-        // Position target just below the pinned area
-        return targetOffset - topOffset;
+        // Position target just below the pinned area (at viewport Y = topOffset)
+        // scrollOffset + topOffset = topOffset + targetOffset
+        // scrollOffset = targetOffset
+        return targetOffset;
       case ScrollAlignment.center:
         // Center target in the effective viewport (excluding pinned area)
-        return targetOffset -
-            topOffset -
-            (effectiveViewport / 2) +
-            (targetHeight / 2);
+        // Target center at viewport Y = topOffset + effectiveViewport/2
+        return targetOffset - (effectiveViewport / 2) + (targetHeight / 2);
       case ScrollAlignment.end:
         // Position target at the bottom of the viewport
-        return targetOffset - viewportDimension + targetHeight;
+        // Target bottom at viewport Y = viewportDimension
+        return topOffset + targetOffset + targetHeight - viewportDimension;
     }
   }
 }

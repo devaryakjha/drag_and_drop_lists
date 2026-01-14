@@ -59,6 +59,15 @@ class DragAndDropBuilderParameters {
   final bool disableScrolling;
   final AutoCollapseConfig autoCollapseConfig;
 
+  /// Fixed height for items. When set, enables performance optimizations
+  /// by avoiding runtime measurement. Set to null to use dynamic sizing
+  /// (required for accessibility/text scale support).
+  final double? itemHeight;
+
+  /// Fixed height for list headers. When set, enables performance optimizations
+  /// by avoiding runtime measurement.
+  final double? listHeaderHeight;
+
   DragAndDropBuilderParameters({
     this.onPointerMove,
     this.onPointerUp,
@@ -98,5 +107,7 @@ class DragAndDropBuilderParameters {
     this.constrainDraggingAxis = true,
     this.disableScrolling = false,
     this.autoCollapseConfig = AutoCollapseConfig.disabled,
+    this.itemHeight,
+    this.listHeaderHeight,
   });
 }

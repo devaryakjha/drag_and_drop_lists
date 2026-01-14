@@ -1,7 +1,7 @@
 import 'package:drag_and_drop_lists/drag_and_drop_list_interface.dart';
 import 'package:drag_and_drop_lists/drag_and_drop_lists.dart';
+import 'package:drag_and_drop_lists/src/animated_ghost_placeholder.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 
 class DragAndDropItemTarget extends StatefulWidget {
   final Widget child;
@@ -9,12 +9,13 @@ class DragAndDropItemTarget extends StatefulWidget {
   final DragAndDropBuilderParameters parameters;
   final OnItemDropOnLastTarget onReorderOrAdd;
 
-  const DragAndDropItemTarget(
-      {required this.child,
-      required this.onReorderOrAdd,
-      required this.parameters,
-      this.parent,
-      super.key});
+  const DragAndDropItemTarget({
+    required this.child,
+    required this.onReorderOrAdd,
+    required this.parameters,
+    this.parent,
+    super.key,
+  });
 
   @override
   State<StatefulWidget> createState() => _DragAndDropItemTarget();
@@ -26,63 +27,56 @@ class _DragAndDropItemTarget extends State<DragAndDropItemTarget>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: <Widget>[
-        Column(
-          crossAxisAlignment: widget.parameters.verticalAlignment,
+    final params = widget.parameters;
+
+    // Build the ghost placeholder using opacity animation (no layout thrashing)
+    final ghostPlaceholder = AnimatedGhostPlaceholder(
+      isVisible: _hoveredDraggable != null,
+      height: params.itemHeight,
+      opacity: params.itemGhostOpacity,
+      duration: Duration(milliseconds: params.itemSizeAnimationDuration),
+      child: params.itemGhost ?? _hoveredDraggable?.child,
+    );
+
+    // Use DragTarget's builder directly to avoid Stack+Positioned.fill overhead
+    return DragTarget<DragAndDropItem>(
+      builder: (context, candidateData, rejectedData) {
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: params.verticalAlignment,
           children: <Widget>[
-            AnimatedSize(
-              duration: Duration(
-                  milliseconds: widget.parameters.itemSizeAnimationDuration),
-              alignment: Alignment.topCenter,
-              child: _hoveredDraggable != null
-                  ? Opacity(
-                      opacity: widget.parameters.itemGhostOpacity,
-                      child: widget.parameters.itemGhost ??
-                          _hoveredDraggable!.child,
-                    )
-                  : Container(),
-            ),
+            ghostPlaceholder,
             widget.child,
           ],
-        ),
-        Positioned.fill(
-          child: DragTarget<DragAndDropItem>(
-            builder: (context, candidateData, rejectedData) {
-              if (candidateData.isNotEmpty) {}
-              return Container();
-            },
-            onWillAcceptWithDetails: (details) {
-              bool accept = true;
-              if (widget.parameters.itemTargetOnWillAccept != null) {
-                accept =
-                    widget.parameters.itemTargetOnWillAccept!(details.data, widget);
-              }
-              if (accept && mounted) {
-                setState(() {
-                  _hoveredDraggable = details.data;
-                });
-              }
-              return accept;
-            },
-            onLeave: (data) {
-              if (mounted) {
-                setState(() {
-                  _hoveredDraggable = null;
-                });
-              }
-            },
-            onAcceptWithDetails: (details) {
-              if (mounted) {
-                setState(() {
-                  widget.onReorderOrAdd(details.data, widget.parent!, widget);
-                  _hoveredDraggable = null;
-                });
-              }
-            },
-          ),
-        ),
-      ],
+        );
+      },
+      onWillAcceptWithDetails: (details) {
+        bool accept = true;
+        if (params.itemTargetOnWillAccept != null) {
+          accept = params.itemTargetOnWillAccept!(details.data, widget);
+        }
+        if (accept && mounted) {
+          setState(() {
+            _hoveredDraggable = details.data;
+          });
+        }
+        return accept;
+      },
+      onLeave: (data) {
+        if (mounted) {
+          setState(() {
+            _hoveredDraggable = null;
+          });
+        }
+      },
+      onAcceptWithDetails: (details) {
+        if (mounted) {
+          setState(() {
+            widget.onReorderOrAdd(details.data, widget.parent!, widget);
+            _hoveredDraggable = null;
+          });
+        }
+      },
     );
   }
 }
