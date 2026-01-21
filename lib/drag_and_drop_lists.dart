@@ -454,6 +454,14 @@ class DragAndDropListsState extends State<DragAndDropLists> {
   bool _scrolling = false;
   final PageStorageBucket _pageStorageBucket = PageStorageBucket();
 
+  /// Whether a list is currently being dragged.
+  ///
+  /// Used to conditionally expand the last list target to fill remaining
+  /// viewport space during drag operations. This only takes effect when
+  /// [sliverList] and [autoCollapseConfig.enabled] are both true.
+  /// See [_wrapLastTargetIfNeeded] for expansion logic.
+  bool _isListDragging = false;
+
   /// Manager for the auto-collapse feature.
   late CollapseStateManager _collapseManager;
 
@@ -672,7 +680,10 @@ class DragAndDropListsState extends State<DragAndDropLists> {
     }
 
     // Add the drop target for adding lists at the end
-    children.add(SliverToBoxAdapter(child: dragAndDropListTarget));
+    // Wrap with expanded target when conditions are met
+    children.add(
+      SliverToBoxAdapter(child: _wrapLastTargetIfNeeded(dragAndDropListTarget)),
+    );
 
     return MultiSliver(
       pushPinnedChildren: true,
@@ -738,7 +749,8 @@ class DragAndDropListsState extends State<DragAndDropLists> {
       bool includeSeparators,
       DragAndDropBuilderParameters parameters) {
     if (index == childrenCount - 1) {
-      return dragAndDropListTarget;
+      // Wrap with expanded target in sliver mode when conditions are met
+      return _wrapLastTargetIfNeeded(dragAndDropListTarget);
     } else if (includeSeparators && index.isOdd) {
       return widget.listDivider!;
     } else {
@@ -748,6 +760,36 @@ class DragAndDropListsState extends State<DragAndDropLists> {
         parameters: parameters,
       );
     }
+  }
+
+  /// Wraps the last list target with an expanded drop zone when conditions are met.
+  ///
+  /// The target is expanded to fill remaining viewport space when:
+  /// - Using sliver mode ([widget.sliverList] is true)
+  /// - Auto-collapse is enabled ([_effectiveAutoCollapseConfig.enabled])
+  /// - A list is currently being dragged ([_isListDragging])
+  /// - A scroll controller is available
+  ///
+  /// When all conditions are met, wraps [target] in [ExpandedLastListTarget]
+  /// which uses [LayoutBuilder] to calculate remaining viewport height.
+  /// Otherwise returns [target] unchanged.
+  ///
+  /// This makes it easier to drop lists at the last position when there's
+  /// whitespace below the collapsed lists.
+  Widget _wrapLastTargetIfNeeded(DragAndDropListTarget target) {
+    final shouldExpand = widget.sliverList &&
+        _effectiveAutoCollapseConfig.enabled &&
+        _isListDragging &&
+        _scrollController != null;
+
+    if (!shouldExpand) {
+      return target;
+    }
+
+    return ExpandedLastListTarget(
+      scrollController: _scrollController!,
+      child: target,
+    );
   }
 
   _internalOnItemReorder(DragAndDropItem reordered, DragAndDropItem receiver) {
@@ -1138,6 +1180,13 @@ class DragAndDropListsState extends State<DragAndDropLists> {
     _log('  list: ${list?.runtimeType}, key=${list?.key}');
     _log('  dragging: $dragging');
     _log('  droppedListIndex before: ${_collapseManager.droppedListIndex}');
+
+    // Update drag state for expanded last target feature
+    if (mounted && _isListDragging != dragging) {
+      setState(() {
+        _isListDragging = dragging;
+      });
+    }
 
     if (list != null) {
       if (dragging) {

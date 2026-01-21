@@ -137,3 +137,76 @@ class _DragAndDropListTarget extends State<DragAndDropListTarget>
     );
   }
 }
+
+/// Wraps [DragAndDropListTarget] to expand it to fill remaining viewport space.
+///
+/// Used in sliver mode when auto-collapse is active and a list is being dragged.
+/// This makes it easier to drop lists at the last position when there's whitespace
+/// below the collapsed lists.
+///
+/// The caller is responsible for determining when to use this wrapper - this
+/// widget always applies expansion when instantiated.
+class ExpandedLastListTarget extends StatelessWidget {
+  /// The [DragAndDropListTarget] to wrap with expanded height.
+  final DragAndDropListTarget child;
+
+  /// The scroll controller used to calculate viewport dimensions.
+  ///
+  /// Required to determine how much vertical space remains in the viewport
+  /// for intelligent target sizing during drag operations.
+  final ScrollController scrollController;
+
+  const ExpandedLastListTarget({
+    required this.child,
+    required this.scrollController,
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final expandedHeight = _calculateExpandedHeight();
+
+        return SizedBox(
+          height: expandedHeight,
+          child: child,
+        );
+      },
+    );
+  }
+
+  double _calculateExpandedHeight() {
+    // Minimum height is the original target size
+    final minHeight = child.lastListTargetSize;
+
+    // Fall back to minimum height if scroll controller not attached
+    if (!scrollController.hasClients) {
+      return minHeight;
+    }
+
+    final position = scrollController.position;
+    final viewportHeight = position.viewportDimension;
+    final maxScrollExtent = position.maxScrollExtent;
+
+    // Only expand when content doesn't fill the viewport (maxScrollExtent is small).
+    // This means there's genuine visible whitespace that can't be scrolled away.
+    //
+    // When maxScrollExtent is large, the content is scrollable and there's no
+    // permanent whitespace - expanding would cause overscroll issues.
+    //
+    // We use minHeight as the threshold: if maxScrollExtent is less than the
+    // default target size, there's whitespace we should fill.
+    if (maxScrollExtent < minHeight) {
+      // Content is shorter than viewport. Expand to fill the visible whitespace.
+      // The whitespace equals: viewportHeight - (current content height)
+      // Since content height ≈ maxScrollExtent + viewportHeight - currentTargetHeight,
+      // and we want to fill to viewport, expand by the difference.
+      final expandedHeight = viewportHeight - maxScrollExtent;
+      return expandedHeight > minHeight ? expandedHeight : minHeight;
+    }
+
+    // Content fills the viewport - use minimum height to avoid overscroll
+    return minHeight;
+  }
+}
